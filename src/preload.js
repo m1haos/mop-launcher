@@ -8,5 +8,7 @@ contextBridge.exposeInMainWorld('mop', {
   listMaps: () => ipcRenderer.invoke('maps:list'),
   getMapStatus: id => ipcRenderer.invoke('map:status', id),
   play: id => ipcRenderer.invoke('map:play', id),
+  openFolder: target => ipcRenderer.invoke('folder:open', target),
   onProgress: callback => ipcRenderer.on('progress', (_e, data) => callback(data)),
+  onGame: callback => ipcRenderer.on('game', (_e, data) => callback(data)),
 });

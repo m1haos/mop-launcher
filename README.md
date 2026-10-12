@@ -13,12 +13,38 @@ Electron + библиотеки @xmcl (установка NeoForge, загруз
 
 ```powershell
 cd launcher
-npm install      # один раз и после изменения package.json
-npm start        # открыть лаунчер
+npm.cmd install      # один раз и после изменения package.json
+npm.cmd start        # открыть лаунчер
 ```
+
+В PowerShell пишите `npm.cmd`, а не `npm`: обычный `npm` там блокируется политикой скриптов.
 
 Настройки игрока (ник) лежат в `%APPDATA%\MOP Launcher\settings.json`.
 Удалите файл, чтобы снова увидеть первый запуск.
+
+## Где лежит игра
+
+```
+%APPDATA%\MOP Launcher\
+  settings.json          ник
+  state.json             что уже установлено
+  java\                  Java от Mojang (та же, что у официального лаунчера)
+  game\                  общие файлы: versions, libraries, assets
+  instances\mop2\        папка игры карты: mods, config, saves, logs
+```
+
+Если в пути к `%APPDATA%` есть русские буквы (имя пользователя Windows кириллицей),
+игра ставится в `C:\Users\Public\MOP Launcher`: Minecraft плохо переносит такие пути.
+Ник остаётся в `%APPDATA%`.
+
+Проверка установки и запуска из консоли, без окна (то же, что делает кнопка, но с подробным выводом):
+
+```powershell
+npm.cmd run try:install
+npm.cmd run try:launch -- Freddy_42
+```
+
+Чтобы установить всё заново, удалите `state.json` (или всю папку `MOP Launcher`).
 
 ## Сборка карты (.mrpack)
 
@@ -29,8 +55,8 @@ npm start        # открыть лаунчер
 
 ```powershell
 cd launcher
-npm run pack:lock    # дописать в pack/modlist.lock.json новые записи из modlist.json и хеши sha512
-npm run pack:build   # собрать launcher/dist-pack/
+npm.cmd run pack:lock    # дописать в pack/modlist.lock.json новые записи из modlist.json и хеши sha512
+npm.cmd run pack:build   # собрать launcher/dist-pack/
 ```
 
 В `launcher/dist-pack/` появляются `mop2-<версия>.mrpack`, `mop2-cover.png`
@@ -46,7 +72,7 @@ npm run pack:build   # собрать launcher/dist-pack/
 Лаунчер читает список игр из адреса в `config.json`:
 
 - `"manifest": "dev-manifest.json"` — локальный файл для разработки (сейчас);
-- `"manifest": "https://github.com/<владелец>/<репо>/releases/latest/download/manifest.json"` — после первого релиза.
+- `"manifest": "https://github.com/m1haos/mop-launcher/releases/latest/download/manifest.json"` — после первого релиза.
 
 Ссылки внутри манифеста могут быть относительными: лаунчер считает их от адреса манифеста,
 поэтому файлы просто должны лежать в том же релизе.
@@ -77,22 +103,28 @@ npm run pack:build   # собрать launcher/dist-pack/
 launcher/
   config.json          откуда брать манифест
   dev-manifest.json    манифест для разработки
-  scripts/             сборка карты: lock.js, build-pack.js
-  src/main/            «мотор»: окно, настройки, манифест (дальше установка и запуск)
+  scripts/             сборка карты (lock.js, build-pack.js), проверки из консоли (try-*.js)
+  src/main/            «мотор»: окно, настройки, манифест, установка и запуск (game.js)
   src/preload.js       мост между интерфейсом и «мотором» (window.mop)
   src/renderer/        интерфейс: index.html, style.css, app.js, assets/
 ```
+
+## Библиотеки
+
+`@xmcl/installer` закреплён на 6.1.2, `@xmcl/core` на 2.15.1. Более новые версии
+(installer 6.3.x) на npm сейчас не ставятся: их зависимость `@xmcl/unzip` 2.2.0
+опубликована битой. Обновлять, когда выйдет исправленная `@xmcl/unzip`.
 
 ## План
 
 | Шаг | Что | Статус |
 |---|---|---|
-| 0 | Сборка `.mrpack` и манифест | готово, ждёт проверки |
-| 1 | Окно, ник с сохранением | готово, ждёт проверки |
-| 2 | Список игр, страница игры: обложка, описание, кнопка «Установить / Играть» | готово, ждёт проверки |
-| 3 | Java 21 | |
-| 4 | Minecraft 1.21.1 + NeoForge | |
-| 5 | Запуск без модов в своей папке | |
+| 0 | Сборка `.mrpack` и манифест | готово |
+| 1 | Окно, ник с сохранением | готово |
+| 2 | Список игр, страница игры: обложка, описание, кнопка «Установить / Играть» | готово |
+| 3 | Java 21 | готово, ждёт проверки |
+| 4 | Minecraft 1.21.1 + NeoForge | готово, ждёт проверки |
+| 5 | Запуск без модов в своей папке | готово, ждёт проверки |
 | 6 | Установка `.mrpack`: файлы с проверкой sha1, докачка изменившегося | |
 | 7 | Мир: шаблон, «Играть» сразу в мир | |
 | 8 | «Создать игру» (адрес e4mc из лога) и «Присоединиться» | |

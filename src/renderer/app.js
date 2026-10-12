@@ -14,7 +14,11 @@ const state = {
   maps: [],
   offline: false,
   statuses: {},
+  working: new Set(),
 };
+
+// Elements of the open game page; null on the library screen
+let gameView = null;
 
 function fromTemplate(id) {
   return document.getElementById(id).content.firstElementChild.cloneNode(true);
@@ -86,6 +90,7 @@ nickForm.addEventListener('submit', async e => {
 // ---------- library ----------
 
 function renderLibrary() {
+  gameView = null;
   const section = fromTemplate('tpl-library');
   const grid = section.querySelector('.library-grid');
 
@@ -115,7 +120,6 @@ function renderLibrary() {
 
 function renderGame(map) {
   const section = fromTemplate('tpl-game');
-  const installed = state.statuses[map.id]?.installed;
 
   section.querySelector('.back').addEventListener('click', renderLibrary);
   section.querySelector('.game-cover img').src = map.cover || '';
@@ -137,34 +141,96 @@ function renderGame(map) {
     desc.append(p);
   }
 
-  const button = section.querySelector('.btn-play');
-  const label = button.querySelector('span');
-  const status = section.querySelector('.game-status');
-  label.textContent = installed ? 'Играть' : 'Установить';
+  gameView = {
+    id: map.id,
+    button: section.querySelector('.btn-play'),
+    label: section.querySelector('.btn-play span'),
+    status: section.querySelector('.game-status'),
+    progress: section.querySelector('.progress'),
+    fill: section.querySelector('.progress-fill'),
+  };
+  updateButton();
 
-  button.addEventListener('click', async () => {
+  gameView.button.addEventListener('click', async () => {
     if (!state.settings.nick) {
       openNickDialog();
       return;
     }
-    button.disabled = true;
-    status.className = 'game-status';
-    status.textContent = installed ? 'Запускаю…' : 'Готовлю установку…';
+    const id = map.id;
+    const wasInstalled = state.statuses[id]?.installed;
+    state.working.add(id);
+    updateButton();
+    setStatus(id, wasInstalled ? 'Запускаю…' : 'Готовлю установку…');
     try {
-      const res = await window.mop.play(map.id);
-      status.textContent = res.message || '';
-      status.classList.toggle('is-ok', !!res.ok);
-      status.classList.toggle('is-error', !!res.error);
+      const res = await window.mop.play(id);
+      state.statuses[id] = await window.mop.getMapStatus(id);
+      setStatus(id, res.message || '', res.ok ? 'ok' : res.error ? 'error' : '');
     } catch (err) {
-      status.textContent = err.message;
-      status.classList.add('is-error');
+      setStatus(id, err.message, 'error');
     } finally {
-      button.disabled = false;
+      state.working.delete(id);
+      showProgress(id, null);
+      updateButton();
     }
   });
 
   show(section);
 }
+
+// ---------- install / play state ----------
+
+function updateButton() {
+  if (!gameView) return;
+  const st = state.statuses[gameView.id] || {};
+  const working = state.working.has(gameView.id);
+  gameView.label.textContent = st.running ? 'Игра запущена'
+    : working ? (st.installed ? 'Запускаю…' : 'Устанавливаю…')
+    : st.installed ? 'Играть' : 'Установить';
+  gameView.button.disabled = working || !!st.running;
+}
+
+function setStatus(id, text, kind = '') {
+  if (!gameView || gameView.id !== id) return;
+  gameView.status.className = 'game-status' + (kind ? ` is-${kind}` : '');
+  gameView.status.replaceChildren(text);
+}
+
+// share: 0..1, 'unknown' for a running step without numbers, null to hide
+function showProgress(id, share) {
+  if (!gameView || gameView.id !== id) return;
+  gameView.progress.hidden = share === null;
+  gameView.progress.classList.toggle('is-unknown', share === 'unknown');
+  gameView.fill.style.width = typeof share === 'number' ? `${Math.round(share * 100)}%` : '';
+}
+
+window.mop.onProgress(({ id, text, progress, total }) => {
+  if (total > 0) {
+    const share = Math.min(progress / total, 1);
+    showProgress(id, share);
+    setStatus(id, `${text}: ${Math.round(share * 100)}%`);
+  } else {
+    showProgress(id, 'unknown');
+    setStatus(id, `${text}…`);
+  }
+});
+
+window.mop.onGame(({ id, running, code, crash, logs }) => {
+  state.statuses[id] = { ...state.statuses[id], running };
+  updateButton();
+  if (running || code === 0 || code === null) {
+    if (!running) setStatus(id, '');
+    return;
+  }
+  setStatus(id, `Игра закрылась с ошибкой (код ${code}). `, 'error');
+  if (gameView && gameView.id === id) {
+    const open = document.createElement('button');
+    open.type = 'button';
+    open.className = 'link-btn';
+    open.textContent = crash ? 'Открыть отчёт о сбое' : 'Открыть папку с логами';
+    open.addEventListener('click', () => window.mop.openFolder(crash || logs));
+    gameView.status.append(open);
+  }
+});
 
 // ---------- start ----------
 

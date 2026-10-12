@@ -239,6 +239,19 @@ button { font: inherit; color: inherit; }
 }
 .progress-fill { width: 0; height: 100%; background: var(--amber); transition: width 200ms; }
 
+/* A step without numbers (e.g. NeoForge setting itself up): a sliding stripe */
+.progress.is-unknown .progress-fill { width: 30%; animation: slide 1.2s ease-in-out infinite; }
+@keyframes slide { from { margin-left: -30%; } to { margin-left: 100%; } }
+
+.link-btn {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--amber);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 /* ---------- the push button: the one loud thing in the interface ---------- */
 
 .btn-push {
