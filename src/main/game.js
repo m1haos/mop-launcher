@@ -189,24 +189,97 @@ async function ensureJava(dirs, state, component, report) {
   return exe;
 }
 
-async function downloadFile(urls, target, sha1) {
+const IDLE_TIMEOUT_MS = 30000;
+
+// Downloads one file, trying the addresses in order. Gives up on an address after
+// IDLE_TIMEOUT_MS without data. Writes to "<target>.tmp" and renames only a complete,
+// checked file, so a broken download never looks like a finished one.
+async function downloadFile(urls, target, { sha1, text, report = () => {} } = {}) {
   let lastError;
   for (const url of urls) {
+    const controller = new AbortController();
+    let idle = setTimeout(() => controller.abort(), IDLE_TIMEOUT_MS);
+    const alive = () => {
+      touch();
+      clearTimeout(idle);
+      idle = setTimeout(() => controller.abort(), IDLE_TIMEOUT_MS);
+    };
     try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(120000) });
+      if (process.env.MOP_DEBUG) console.error(`[get] ${url}`);
+      const res = await fetch(url, { signal: controller.signal });
       if (!res.ok) throw new Error(`${res.status} ${url}`);
-      const data = Buffer.from(await res.arrayBuffer());
-      const actual = crypto.createHash('sha1').update(data).digest('hex');
-      if (sha1 && actual !== sha1) throw new Error(`Файл повреждён при загрузке: ${url}`);
+      const total = Number(res.headers.get('content-length')) || 0;
+      const hash = crypto.createHash('sha1');
+      const chunks = [];
+      let received = 0;
+      for await (const chunk of res.body) {
+        alive();
+        chunks.push(chunk);
+        hash.update(chunk);
+        received += chunk.length;
+        if (text) report({ text, progress: received, total });
+      }
+      if (sha1 && hash.digest('hex') !== sha1) throw new Error(`Файл повреждён при загрузке: ${url}`);
       fs.mkdirSync(path.dirname(target), { recursive: true });
-      fs.writeFileSync(target + '.tmp', data);
+      fs.writeFileSync(target + '.tmp', Buffer.concat(chunks));
       fs.renameSync(target + '.tmp', target);
       return;
     } catch (err) {
-      lastError = err;
+      lastError = controller.signal.aborted ? new Error(`Сервер не отвечает: ${url}`) : err;
+      if (process.env.MOP_DEBUG) console.error(`[fail] ${lastError.message}`);
+    } finally {
+      clearTimeout(idle);
     }
   }
   throw lastError;
+}
+
+async function fetchText(urls) {
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(IDLE_TIMEOUT_MS) });
+      if (res.ok) return (await res.text()).trim();
+    } catch {
+      // next address
+    }
+  }
+  return null;
+}
+
+function isZip(file) {
+  try {
+    const fd = fs.openSync(file, 'r');
+    const head = Buffer.alloc(4);
+    fs.readSync(fd, head, 0, 4, 0);
+    fs.closeSync(fd);
+    return head.readUInt32LE(0) === 0x04034b50 && fs.statSync(file).size > 1024 * 1024;
+  } catch {
+    return false;
+  }
+}
+
+// The NeoForge installer jar, downloaded by the launcher itself: the @xmcl download
+// of this one file hung on some connections. When the jar is already in place and
+// looks whole, @xmcl finds it and does not touch the network.
+async function ensureNeoForgeInstaller(dirs, neoforge, report) {
+  const rel = `net/neoforged/neoforge/${neoforge}/neoforge-${neoforge}-installer.jar`;
+  const target = path.join(dirs.game, 'libraries', ...rel.split('/'));
+  if (isZip(target)) return;
+  const urls = [
+    `https://maven.neoforged.net/releases/${rel}`,
+    `${MIRROR}/maven/${rel}`,
+    `${MIRROR}/neoforge/version/${neoforge}/download/installer.jar`,
+  ];
+  const sha1 = await fetchText(urls.slice(0, 2).map(u => `${u}.sha1`));
+  await downloadFile(urls, target, {
+    sha1: sha1 && /^[0-9a-f]{40}/.test(sha1) ? sha1.slice(0, 40) : undefined,
+    text: 'Скачиваю установщик NeoForge',
+    report,
+  });
+  if (!isZip(target)) {
+    fs.rmSync(target, { force: true });
+    throw new Error('Установщик NeoForge скачался битым');
+  }
 }
 
 function argValue(args, name) {
@@ -228,7 +301,7 @@ async function downloadMojangMappings(dirs, processor, report) {
   if (!version || !output || !info) return false;
   report({ text: 'Настраиваю NeoForge: скачиваю маппинги Mojang', progress: 0, total: 0 });
   touch();
-  await downloadFile([info.url, info.url.replace(/^https:\/\/[^/]+/, MIRROR)], output, info.sha1);
+  await downloadFile([info.url, info.url.replace(/^https:\/\/[^/]+/, MIRROR)], output, { sha1: info.sha1 });
   touch();
   return true;
 }
@@ -241,6 +314,13 @@ async function ensureNeoForge(dirs, state, neoforge, java, report) {
     fs.mkdirSync(path.dirname(logFile), { recursive: true });
     const log = fs.createWriteStream(logFile, { flags: 'a' });
     log.write(`\n=== ${new Date().toISOString()} NeoForge ${neoforge}\n`);
+
+    try {
+      await ensureNeoForgeInstaller(dirs, neoforge, report);
+    } catch (err) {
+      log.end();
+      throw err;
+    }
 
     const options = {
       java,
