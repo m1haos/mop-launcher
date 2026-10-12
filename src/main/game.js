@@ -74,6 +74,11 @@ async function run(task, text, report, stallMinutes = STALL_MINUTES) {
   try {
     return await Promise.race([
       task.startAndWait({
+        // Set MOP_DEBUG=1 to see every internal step of the installer in the console
+        onStart(sub) {
+          touch();
+          if (process.env.MOP_DEBUG) console.error(`[step] ${sub.path}`);
+        },
         onUpdate() {
           const now = Date.now();
           touch();
@@ -194,7 +199,7 @@ function argValue(args, name) {
 // NeoForge asks one of its Java tools to download Mojang's mappings. That tool knows
 // nothing about mirrors and can hang on a bad connection, so the launcher does it itself.
 // Returns true when the step is done here and the tool must not run.
-async function downloadMojangMappings(dirs, processor) {
+async function downloadMojangMappings(dirs, processor, report) {
   const args = processor.args || [];
   if (argValue(args, '--task') !== 'DOWNLOAD_MOJMAPS') return false;
   const version = argValue(args, '--version');
@@ -203,6 +208,7 @@ async function downloadMojangMappings(dirs, processor) {
   const json = JSON.parse(fs.readFileSync(path.join(dirs.game, 'versions', version, `${version}.json`), 'utf8'));
   const info = json.downloads?.[`${side}_mappings`];
   if (!version || !output || !info) return false;
+  report({ text: 'Настраиваю NeoForge: скачиваю маппинги Mojang', progress: 0, total: 0 });
   touch();
   await downloadFile([info.url, info.url.replace(/^https:\/\/[^/]+/, MIRROR)], output, info.sha1);
   touch();
@@ -221,8 +227,10 @@ async function ensureNeoForge(dirs, state, neoforge, java, report) {
     const options = {
       java,
       ...DOWNLOAD_OPTIONS,
-      handler: processor => downloadMojangMappings(dirs, processor),
+      handler: processor => downloadMojangMappings(dirs, processor, report),
       spawn: (command, args, spawnOptions) => {
+        const tool = argValue(args, '--task') || String(args[2]).split('.').pop();
+        report({ text: `Настраиваю NeoForge: ${tool}`, progress: 0, total: 0 });
         log.write(`> ${args.slice(2, 3).join(' ')} ${args.slice(3).join(' ')}\n`);
         const child = spawn(command, args, spawnOptions);
         for (const stream of [child.stdout, child.stderr]) {
