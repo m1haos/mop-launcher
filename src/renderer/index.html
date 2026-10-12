@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; img-src 'self' file: https: data:; media-src 'self' file:; style-src 'self'; script-src 'self'">
+  <title>MOP Launcher</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="bar">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+        <circle cx="16" cy="16" r="15" />
+        <path d="M19.5 7.5a9 9 0 1 0 5 15.6A10 10 0 0 1 19.5 7.5Z" />
+      </svg>
+      <span>MOP Launcher</span>
+    </div>
+    <button id="nick-chip" class="nick-chip" type="button" hidden>
+      <span class="nick-chip-label">Ник</span>
+      <span id="nick-value" class="nick-chip-value"></span>
+    </button>
+  </header>
+
+  <main id="view" class="view"></main>
+
+  <dialog id="nick-dialog" class="nick-dialog">
+    <form id="nick-form" method="dialog" novalidate>
+      <h2>Как тебя звать в игре?</h2>
+      <p class="nick-help">Этот ник увидят друзья в совместной игре. Его можно поменять потом.</p>
+      <label class="field">
+        <span class="field-label">Ник</span>
+        <input id="nick-input" name="nick" maxlength="16" autocomplete="off" spellcheck="false" placeholder="Например, Freddy_42">
+      </label>
+      <p id="nick-error" class="field-error" role="alert"></p>
+      <p class="field-hint">3–16 символов: латинские буквы, цифры и _</p>
+      <div class="dialog-actions">
+        <button id="nick-cancel" class="btn-quiet" type="button">Отмена</button>
+        <button class="btn-push" type="submit"><span>Сохранить</span></button>
+      </div>
+    </form>
+  </dialog>
+
+  <template id="tpl-library">
+    <section class="library">
+      <h1 class="library-title">Игры</h1>
+      <ul class="library-grid"></ul>
+    </section>
+  </template>
+
+  <template id="tpl-card">
+    <li>
+      <button class="card" type="button">
+        <img class="card-cover" alt="">
+        <span class="card-label">
+          <span class="card-title"></span>
+          <span class="card-subtitle"></span>
+        </span>
+        <span class="card-state"><i class="lamp"></i><span class="card-state-text"></span></span>
+      </button>
+    </li>
+  </template>
+
+  <template id="tpl-game">
+    <section class="game">
+      <button class="back" type="button">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3 5 8l5 5" /></svg>
+        Все игры
+      </button>
+      <div class="game-body">
+        <div class="game-cover"><img alt=""></div>
+        <div class="game-info">
+          <h1 class="game-title"></h1>
+          <p class="game-subtitle"></p>
+          <ul class="game-facts"></ul>
+          <div class="game-desc"></div>
+          <div class="game-actions">
+            <button class="btn-push btn-play" type="button"><span>Установить</span></button>
+            <div class="progress" hidden><div class="progress-fill"></div></div>
+            <p class="game-status" role="status"></p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </template>
+
+  <template id="tpl-error">
+    <section class="notice">
+      <h1>Список игр не загрузился</h1>
+      <p class="notice-text"></p>
+      <button class="btn-push" type="button"><span>Повторить</span></button>
+    </section>
+  </template>
+
+  <script src="app.js"></script>
+</body>
+</html>

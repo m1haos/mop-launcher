@@ -1,0 +1,10 @@
+node_modules/
+dist/
+dist-pack/
+release/
+*.log
+BRIEF.md
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini

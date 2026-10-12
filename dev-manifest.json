@@ -1,0 +1,19 @@
+{
+  "formatVersion": 1,
+  "maps": [
+    {
+      "id": "mop2",
+      "title": "Mystery Of Pizzaplex",
+      "subtitle": "Глава 2 — The Dark Corners",
+      "description": "После взрыва в конце первой главы вас отбрасывает глубоко под комплекс. Пещера, заброшенная лаборатория Dreams Co. и голос из динамиков, который хочет поиграть.\n\nДемо: акты 1 и 2 из 4.",
+      "players": "1–5 игроков",
+      "tags": ["Хоррор", "Головоломки", "Кооп"],
+      "version": "0.1.0",
+      "minecraft": "1.21.1",
+      "neoforge": "21.1.252",
+      "cover": "../pack/cover.png",
+      "pack": null,
+      "world": null
+    }
+  ]
+}
