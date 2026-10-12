@@ -6,6 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { spawn } = require('child_process');
 const { Version, launch } = require('@xmcl/core');
 const {
   getVersionList,
@@ -43,23 +44,29 @@ const JAVA_RUNTIMES_URL = 'https://launchermeta.mojang.com/v1/products/java-runt
 const JAVA_FILE_HOSTS = ['piston-data.mojang.com', 'bmclapi2.bangbang93.com'];
 
 const ATTEMPTS = 5;
-const STALL_MS = 3 * 60 * 1000;
+const STALL_MINUTES = 3;
+// NeoForge setup runs Java tools after the downloads; on a slow PC one of them can take minutes
+const NEOFORGE_STALL_MINUTES = 10;
+
+// Last sign of life of the running step: a downloaded chunk or a line from a NeoForge tool
+let lastActivity = Date.now();
+const touch = () => { lastActivity = Date.now(); };
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 // Runs an @xmcl task, reports progress at most ~6 times a second
-// and gives up if nothing moves for STALL_MS (a dropped connection can hang forever).
-async function run(task, text, report) {
+// and gives up if nothing happens for stallMinutes (a dropped connection can hang forever).
+async function run(task, text, report, stallMinutes = STALL_MINUTES) {
   let lastReport = 0;
-  let lastMove = Date.now();
   let timer;
 
+  touch();
   report({ text, progress: 0, total: 0 });
   const stalled = new Promise((_, reject) => {
     timer = setInterval(() => {
-      if (Date.now() - lastMove < STALL_MS) return;
+      if (Date.now() - lastActivity < stallMinutes * 60 * 1000) return;
       // Reject first, then cancel: otherwise the race ends with a bare "Cancelled"
-      reject(new Error('Загрузка зависла: 3 минуты без прогресса'));
+      reject(new Error(`Установка зависла: ${stallMinutes} мин без прогресса`));
       task.cancel().catch(() => {});
     }, 5000);
   });
@@ -69,7 +76,7 @@ async function run(task, text, report) {
       task.startAndWait({
         onUpdate() {
           const now = Date.now();
-          lastMove = now;
+          touch();
           if (now - lastReport < 150) return;
           lastReport = now;
           report({ text, progress: task.progress, total: task.total });
@@ -159,14 +166,88 @@ async function ensureJava(dirs, state, component, report) {
   return exe;
 }
 
+async function downloadFile(urls, target, sha1) {
+  let lastError;
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(120000) });
+      if (!res.ok) throw new Error(`${res.status} ${url}`);
+      const data = Buffer.from(await res.arrayBuffer());
+      const actual = crypto.createHash('sha1').update(data).digest('hex');
+      if (sha1 && actual !== sha1) throw new Error(`Файл повреждён при загрузке: ${url}`);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target + '.tmp', data);
+      fs.renameSync(target + '.tmp', target);
+      return;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError;
+}
+
+function argValue(args, name) {
+  const i = args.indexOf(name);
+  return i >= 0 ? args[i + 1] : undefined;
+}
+
+// NeoForge asks one of its Java tools to download Mojang's mappings. That tool knows
+// nothing about mirrors and can hang on a bad connection, so the launcher does it itself.
+// Returns true when the step is done here and the tool must not run.
+async function downloadMojangMappings(dirs, processor) {
+  const args = processor.args || [];
+  if (argValue(args, '--task') !== 'DOWNLOAD_MOJMAPS') return false;
+  const version = argValue(args, '--version');
+  const side = argValue(args, '--side') || 'client';
+  const output = argValue(args, '--output');
+  const json = JSON.parse(fs.readFileSync(path.join(dirs.game, 'versions', version, `${version}.json`), 'utf8'));
+  const info = json.downloads?.[`${side}_mappings`];
+  if (!version || !output || !info) return false;
+  touch();
+  await downloadFile([info.url, info.url.replace(/^https:\/\/[^/]+/, MIRROR)], output, info.sha1);
+  touch();
+  return true;
+}
+
 async function ensureNeoForge(dirs, state, neoforge, java, report) {
   const id = `neoforge-${neoforge}`;
   if (!state.versions[id]) {
-    await run(
-      installNeoForgedTask('neoforge', neoforge, dirs.game, { java, ...DOWNLOAD_OPTIONS }),
-      `Устанавливаю NeoForge ${neoforge}`,
-      report,
-    );
+    // Output of the NeoForge tools goes to a log: if a tool fails, the reason is there
+    const logFile = path.join(dirs.root, 'logs', 'neoforge-install.log');
+    fs.mkdirSync(path.dirname(logFile), { recursive: true });
+    const log = fs.createWriteStream(logFile, { flags: 'a' });
+    log.write(`\n=== ${new Date().toISOString()} NeoForge ${neoforge}\n`);
+
+    const options = {
+      java,
+      ...DOWNLOAD_OPTIONS,
+      handler: processor => downloadMojangMappings(dirs, processor),
+      spawn: (command, args, spawnOptions) => {
+        log.write(`> ${args.slice(2, 3).join(' ')} ${args.slice(3).join(' ')}\n`);
+        const child = spawn(command, args, spawnOptions);
+        for (const stream of [child.stdout, child.stderr]) {
+          stream?.on('data', chunk => {
+            log.write(chunk);
+            touch();
+          });
+        }
+        return child;
+      },
+    };
+
+    try {
+      await run(
+        installNeoForgedTask('neoforge', neoforge, dirs.game, options),
+        `Устанавливаю NeoForge ${neoforge} (последние проценты идут долго)`,
+        report,
+        NEOFORGE_STALL_MINUTES,
+      );
+    } catch (err) {
+      err.logFile = logFile;
+      throw err;
+    } finally {
+      log.end();
+    }
     const resolved = await Version.parse(dirs.game, id);
     await run(installDependenciesTask(resolved, DOWNLOAD_OPTIONS), 'Скачиваю библиотеки NeoForge', report);
     state.versions[id] = true;
@@ -229,7 +310,8 @@ function describeError(err) {
   const code = errorCode(first);
   const prefix = all.length > 1 ? `Не скачались файлы (${all.length}). ` : '';
   if (NETWORK_CODES.has(code)) return `${prefix}Нет связи с сервером загрузки (${code}). Проверь интернет или VPN.`;
-  return `${prefix}${first?.message || String(first)}${code ? ` [${code}]` : ''}`;
+  const message = String(first?.message || first).trim().split('\n').slice(-3).join(' ').slice(0, 300);
+  return `${prefix}${message}${code ? ` [${code}]` : ''}`;
 }
 
 // Several lines for the console and logs
@@ -241,6 +323,7 @@ function errorDetails(err, limit = 5) {
     return `  - ${e?.message || String(e)}${code ? ` [${code}]` : ''}${url}`;
   });
   if (all.length > limit) lines.push(`  ... and ${all.length - limit} more`);
+  if (err?.logFile) lines.push(`  NeoForge log: ${err.logFile}`);
   return lines.join('\n');
 }
 
