@@ -17,6 +17,23 @@ const {
 } = require('@xmcl/installer');
 const stateFile = require('./state');
 
+// The HTTP client of @xmcl waits up to 5 minutes for a silent server and then retries,
+// so one dead host can hang the install for half an hour. This client gives up quickly
+// and the download moves on to the next address (mirror). It must be the same copy
+// of undici that @xmcl/file-transfer uses, so it is loaded from there.
+const undici = require(require.resolve('undici', {
+  paths: [path.dirname(require.resolve('@xmcl/file-transfer'))],
+}));
+const dispatcher = new undici.Agent({
+  connections: 8,
+  connect: { timeout: 15000 },
+  headersTimeout: 30000,
+  bodyTimeout: 60000,
+}).compose(
+  undici.interceptors.retry({ maxRetries: 1 }),
+  undici.interceptors.redirect({ maxRedirections: 5 }),
+);
+
 const IS_WINDOWS = process.platform === 'win32';
 
 // Public mirror of Mojang, Forge and NeoForge files (used by HMCL, PCL and others).
@@ -24,6 +41,7 @@ const IS_WINDOWS = process.platform === 'win32';
 const MIRROR = 'https://bmclapi2.bangbang93.com';
 
 const DOWNLOAD_OPTIONS = {
+  dispatcher,
   json: meta => [meta.url, `${MIRROR}/version/${meta.id}/json`],
   client: version => [version.downloads.client?.url, `${MIRROR}/version/${version.id}/client`].filter(Boolean),
   assetsHost: ['https://resources.download.minecraft.net', `${MIRROR}/assets`],
@@ -161,7 +179,7 @@ async function ensureJava(dirs, state, component, report) {
   report({ text: 'Узнаю, какую Java скачать', progress: 0, total: 0 });
   const manifest = await javaManifest(component);
   await run(
-    installJavaRuntimeTask({ destination: home, manifest, apiHost: JAVA_FILE_HOSTS }),
+    installJavaRuntimeTask({ destination: home, manifest, apiHost: JAVA_FILE_HOSTS, dispatcher }),
     `Скачиваю Java ${manifest.version.name}`,
     report,
   );
@@ -383,4 +401,4 @@ function lastCrashReport(dirs, mapId, since) {
   return files[0]?.file || null;
 }
 
-module.exports = { prepare, start, offlineUuid, lastCrashReport, describeError, errorDetails };
+module.exports = { prepare, start, offlineUuid, lastCrashReport, describeError, errorDetails, dispatcher };
