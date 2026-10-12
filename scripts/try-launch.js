@@ -12,8 +12,15 @@ const nick = process.argv[2] || 'Tester';
 const pack = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'pack', 'pack.json'), 'utf8'));
 const dirs = paths.layout(paths.gameRoot());
 
+let lastText = '';
+function report({ text }) {
+  if (text === lastText) return;
+  lastText = text;
+  console.log(`${text}...`);
+}
+
 (async () => {
-  const { versionId, java } = await game.prepare(dirs, pack, ({ text }) => console.log(text));
+  const { versionId, java } = await game.prepare(dirs, pack, report);
   console.log(`Starting ${versionId} as ${nick} (uuid ${game.offlineUuid(nick)})`);
   console.log(`Game folder: ${path.join(dirs.instances, pack.id)}`);
   const proc = await game.start(dirs, { mapId: pack.id, versionId, javaw: java.java, nick });
@@ -21,6 +28,7 @@ const dirs = paths.layout(paths.gameRoot());
   proc.stderr.pipe(process.stderr);
   proc.on('exit', code => console.log(`\nGame exited with code ${code}`));
 })().catch(err => {
-  console.error('\nFAILED:', err && (err.stack || err));
+  console.error(`\nFAILED: ${game.describeError(err)}`);
+  console.error(game.errorDetails(err));
   process.exitCode = 1;
 });

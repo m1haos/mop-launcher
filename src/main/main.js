@@ -102,8 +102,8 @@ ipcMain.handle('map:play', async (_e, id) => {
   try {
     return isInstalled(map) ? await play(map) : await install(map);
   } catch (err) {
-    console.error(err);
-    return { ok: false, error: true, message: `Ошибка: ${err.message}` };
+    console.error(game.errorDetails(err));
+    return { ok: false, error: true, message: game.describeError(err) };
   } finally {
     busy.delete(id);
   }
