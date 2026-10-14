@@ -76,6 +76,29 @@ function addWorld(zip, srcDir, rel = '') {
   return count;
 }
 
+// Our own mods: mod/<name>/ in the map project, built with "gradlew build".
+// The newest jar of each goes into the pack; a mod folder without a built jar stops the build.
+function addOwnMods(zip) {
+  const modsDir = path.join(ROOT, 'mod');
+  if (!fs.existsSync(modsDir)) return 0;
+  let count = 0;
+  for (const item of fs.readdirSync(modsDir, { withFileTypes: true })) {
+    if (!item.isDirectory()) continue;
+    const libs = path.join(modsDir, item.name, 'build', 'libs');
+    const jars = fs.existsSync(libs)
+      ? fs.readdirSync(libs)
+        .filter(name => name.endsWith('.jar') && !/-(sources|javadoc).jar$/.test(name))
+        .map(name => ({ name, time: fs.statSync(path.join(libs, name)).mtimeMs }))
+        .sort((a, b) => b.time - a.time)
+      : [];
+    if (jars.length === 0) throw new Error(`mod/${item.name} has no built jar: run gradlew build in that folder first`);
+    zip.addFile(`overrides/mods/${jars[0].name}`, fs.readFileSync(path.join(libs, jars[0].name)));
+    console.log(`Own mod: ${jars[0].name}`);
+    count++;
+  }
+  return count;
+}
+
 function lockEntry(lock, slug) {
   const entry = lock.mods.find(m => m.slug === slug);
   if (!entry) throw new Error(`"${slug}" is not in modlist.lock.json: add it to modlist.json and run npm run pack:lock`);
@@ -174,6 +197,7 @@ function main() {
   let count = 0;
   count += addFolder(zip, path.join(PACK_DIR, 'config'), 'overrides/config');
   count += addFolder(zip, path.join(PACK_DIR, 'kubejs'), 'overrides/kubejs');
+  count += addOwnMods(zip);
   for (const name of pack.resourcepacks) {
     const local = path.join(PACK_DIR, 'resourcepacks', name);
     if (fs.existsSync(local)) count += addFolder(zip, local, `overrides/resourcepacks/${name}`);

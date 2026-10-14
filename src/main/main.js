@@ -60,7 +60,7 @@ async function install(map) {
   return { ok: true, message: 'Готово. Нажми «Играть».' };
 }
 
-// Without server: the map world (a friend can join once the host opens it for the network).
+// Without server: the main menu of the map (its "Play -> Host a lobby" opens the world for friends).
 // With server: the game of a friend at that address.
 async function play(map, server) {
   const d = dirs();
@@ -73,7 +73,6 @@ async function play(map, server) {
     versionId,
     javaw: java.javaw,
     nick: settings.load().nick,
-    world: server ? undefined : map.world?.folder,
     server,
   });
   running.set(map.id, proc);
