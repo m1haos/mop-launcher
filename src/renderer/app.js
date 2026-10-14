@@ -98,7 +98,7 @@ nickForm.addEventListener('submit', async e => {
 // ---------- music ----------
 
 // Web Audio instead of <audio loop>: it loops the track without a gap
-const MUSIC_VOLUME = 0.35;
+const MUSIC_VOLUME = 0.22;
 const music = { context: null, gain: null };
 
 async function startMusic() {
