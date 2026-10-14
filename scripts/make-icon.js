@@ -1,4 +1,5 @@
-// Draws build/icon.svg into build/icon.png (512x512) and build/icon.ico (16-256 px).
+// Draws build/icon.svg into build/icon.png (512x512), build/icon.ico (16-256 px)
+// and src/renderer/assets/brand.png (the header logo).
 // Electron does the drawing because Windows has no SVG converter out of the box.
 // The .ico is made here too: the converter of electron-builder fails on some PCs
 // with "WebAssembly.Memory(): could not allocate memory".
@@ -63,6 +64,8 @@ app.whenReady().then(async () => {
   const images = [];
   for (const size of ICO_SIZES) images.push({ size, png: await render(size) });
   fs.writeFileSync(path.join(dir, 'icon.ico'), ico(images));
+  // The logo in the launcher header: 32 px on screen, twice that for sharp HiDPI screens
+  fs.writeFileSync(path.join(__dirname, '..', 'src', 'renderer', 'assets', 'brand.png'), await render(64));
   console.log(`Saved icon.png and icon.ico in ${dir}`);
   app.quit();
 }).catch(err => {

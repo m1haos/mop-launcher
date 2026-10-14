@@ -58,9 +58,7 @@ button { font: inherit; color: inherit; }
   letter-spacing: 0.02em;
 }
 
-.brand-mark { width: 26px; height: 26px; }
-.brand-mark circle { fill: var(--brand); }
-.brand-mark path { fill: var(--amber); }
+.brand-mark { width: 32px; height: 32px; }
 
 .bar-right { display: flex; align-items: center; gap: 10px; }
 

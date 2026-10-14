@@ -124,12 +124,38 @@ ipcMain.handle('music:get', () => {
   }
 });
 
-ipcMain.handle('maps:list', async () => {
-  const res = await manifest.load();
-  maps = res.maps;
+// What the interface gets: the list with covers from the local cache where possible
+function withCovers(res) {
   const cacheDir = path.join(app.getPath('userData'), 'covers');
-  for (const map of res.maps) map.cover = covers.localCover(map, cacheDir, manifest.bundledDir());
-  return res;
+  const shown = res.maps.map(map => ({ ...map, cover: covers.localCover(map, cacheDir, manifest.bundledDir()) }));
+  return { ...res, maps: shown };
+}
+
+let shownList = '';
+
+function useList(res) {
+  maps = res.maps;
+  shownList = JSON.stringify(res.maps);
+  return withCovers(res);
+}
+
+// The local list goes to the window at once; the fresh one replaces it when it arrives and differs
+async function refreshMaps() {
+  try {
+    const res = await manifest.loadRemote();
+    if (JSON.stringify(res.maps) !== shownList) send('maps', useList(res));
+  } catch {
+    send('maps', { ...withCovers({ maps }), offline: true });
+  }
+}
+
+ipcMain.handle('maps:list', async () => {
+  const local = manifest.loadLocal();
+  if (local) {
+    refreshMaps();
+    return useList(local);
+  }
+  return useList(await manifest.load());
 });
 
 ipcMain.handle('map:status', (_e, id) => status(id));

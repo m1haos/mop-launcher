@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('mop', {
   getGraphics: id => ipcRenderer.invoke('map:graphics', id),
   getMusic: () => ipcRenderer.invoke('music:get'),
   listMaps: () => ipcRenderer.invoke('maps:list'),
+  onMaps: callback => ipcRenderer.on('maps', (_e, data) => callback(data)),
   getMapStatus: id => ipcRenderer.invoke('map:status', id),
   play: id => ipcRenderer.invoke('map:play', id),
   copy: text => ipcRenderer.invoke('clipboard:write', text),

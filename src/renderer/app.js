@@ -371,6 +371,22 @@ async function loadMaps() {
   }
 }
 
+// A fresher list from the network replaced the one shown at start
+window.mop.onMaps(async res => {
+  state.maps = res.maps;
+  state.offline = res.offline;
+  for (const map of state.maps) {
+    state.statuses[map.id] = await window.mop.getMapStatus(map.id);
+  }
+  if (!gameView) {
+    if (view.querySelector('.library')) renderLibrary();
+    return;
+  }
+  // The open game page is redrawn only when nothing runs on it, so progress is not lost
+  const open = state.maps.find(m => m.id === gameView.id);
+  if (open && !state.working.has(open.id) && !state.statuses[open.id]?.running) renderGame(open);
+});
+
 async function start() {
   state.settings = await window.mop.getSettings();
   showNick();

@@ -1,8 +1,8 @@
 // Loads the list of maps.
 // config.json -> "manifest": a link (https://...) or a file path relative to the launcher folder;
 //                "bundled": the manifest that ships inside the installer (dist-pack/ at build time).
-// Order: the link, then the copy from the last successful download, then the bundled one,
-// so a fresh install shows the maps even before the first GitHub release or without internet.
+// The launcher shows a local list at once (the copy from the last download, else the bundled one)
+// and fetches the link in the background (main.js). Without anything local it waits for the link.
 // Links inside the manifest (cover, pack, world) may be relative to the manifest itself.
 
 const fs = require('fs');
@@ -27,6 +27,8 @@ function resolveLinks(manifest, base) {
     world: map.world ? { ...map.world, url: abs(map.world.url) } : null,
   }));
 }
+
+const isLink = source => /^https?:\/\//.test(source);
 
 function check(manifest) {
   if (!manifest || !Array.isArray(manifest.maps)) throw new Error('В манифесте нет списка карт');
@@ -63,10 +65,33 @@ function bundled(rel) {
   }
 }
 
+// The list that is on disk right now, without the network; null if there is none
+function loadLocal() {
+  const { manifest: source, bundled: bundledRel } = config();
+  if (!isLink(source)) return { maps: readLocal(source, app.getAppPath()), offline: false };
+  try {
+    const manifest = check(JSON.parse(fs.readFileSync(cacheFile(), 'utf8')));
+    return { maps: resolveLinks(manifest, source), offline: false };
+  } catch {
+    const maps = bundled(bundledRel);
+    return maps ? { maps, offline: false } : null;
+  }
+}
+
+// The fresh list from the link; it also becomes the local copy for the next start
+async function loadRemote() {
+  const { manifest: source } = config();
+  if (!isLink(source)) return loadLocal();
+  const manifest = await download(source);
+  fs.mkdirSync(path.dirname(cacheFile()), { recursive: true });
+  fs.writeFileSync(cacheFile(), JSON.stringify(manifest), 'utf8');
+  return { maps: resolveLinks(manifest, source), offline: false };
+}
+
 async function load() {
   const { manifest: source, bundled: bundledRel } = config();
 
-  if (!/^https?:\/\//.test(source)) {
+  if (!isLink(source)) {
     return { maps: readLocal(source, app.getAppPath()), offline: false };
   }
 
@@ -87,4 +112,4 @@ async function load() {
   }
 }
 
-module.exports = { load, bundledDir };
+module.exports = { load, loadLocal, loadRemote, bundledDir };
