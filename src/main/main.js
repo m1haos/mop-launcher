@@ -12,6 +12,7 @@ const game = require('./game');
 const pack = require('./pack');
 const world = require('./world');
 const graphics = require('./graphics');
+const covers = require('./covers');
 
 let win = null;
 let maps = [];
@@ -60,12 +61,12 @@ async function install(map) {
   return { ok: true, message: 'Готово. Нажми «Играть».' };
 }
 
-// Without server: the main menu of the map (its "Play -> Host a lobby" opens the world for friends).
-// With server: the game of a friend at that address.
-async function play(map, server) {
+// Opens the main menu of the map; its "Play -> Host a lobby" opens the world for friends
+// and "Play -> Join" goes to a friend.
+async function play(map) {
   const d = dirs();
   const { versionId, java } = await game.prepare(d, map);
-  if (!server) world.allowOfflineFriends(d, map);
+  world.allowOfflineFriends(d, map);
   graphics.apply(path.join(d.instances, map.id), settings.load().graphics);
   const startedAt = Date.now();
   const proc = await game.start(d, {
@@ -73,23 +74,20 @@ async function play(map, server) {
     versionId,
     javaw: java.javaw,
     nick: settings.load().nick,
-    server,
   });
   running.set(map.id, proc);
 
-  if (!server) game.onHostAddress(proc, address => send('game', { id: map.id, running: true, address }));
+  game.onHostAddress(proc, address => send('game', { id: map.id, running: true, address }));
   proc.on('exit', code => {
     running.delete(map.id);
     const crash = code !== 0 ? game.lastCrashReport(d, map.id, startedAt) : null;
     const logs = path.join(d.instances, map.id, 'logs');
     send('game', { id: map.id, running: false, code, crash, logs });
   });
-  send('game', { id: map.id, running: true, host: !server });
+  send('game', { id: map.id, running: true, host: true });
   return {
     ok: true,
-    message: server
-      ? `Захожу к другу на ${server}. Первый запуск с модами может идти пару минут.`
-      : 'Игра запускается. Первый запуск с модами может идти пару минут.',
+    message: 'Игра запускается. Первый запуск с модами может идти пару минут.',
   };
 }
 
@@ -129,6 +127,8 @@ ipcMain.handle('music:get', () => {
 ipcMain.handle('maps:list', async () => {
   const res = await manifest.load();
   maps = res.maps;
+  const cacheDir = path.join(app.getPath('userData'), 'covers');
+  for (const map of res.maps) map.cover = covers.localCover(map, cacheDir, manifest.bundledDir());
   return res;
 });
 
@@ -163,12 +163,6 @@ async function guarded(id, action) {
 // One button: installs if needed, otherwise starts the game
 ipcMain.handle('map:play', (_e, id) => guarded(id, map => (isInstalled(map) ? play(map) : install(map))));
 
-ipcMain.handle('map:join', (_e, id, address) => guarded(id, map => {
-  const res = settings.setServer(address);
-  if (!res.ok) return { ok: false, error: true, message: res.error };
-  if (!isInstalled(map)) return { ok: false, error: true, message: 'Сначала установи игру' };
-  return play(map, res.settings.server);
-}));
 
 ipcMain.handle('clipboard:write', (_e, text) => clipboard.writeText(String(text)));
 ipcMain.handle('folder:open', (_e, target) => shell.openPath(target));

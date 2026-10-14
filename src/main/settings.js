@@ -5,7 +5,7 @@ const path = require('path');
 const { app } = require('electron');
 
 // graphics: level id from mop-graphics.json of the map; empty means the default of the map
-const DEFAULTS = { nick: '', server: '', music: true, graphics: '' };
+const DEFAULTS = { nick: '', music: true, graphics: '' };
 
 // Minecraft accepts 3-16 characters: latin letters, digits, underscore
 const NICK_RE = /^[A-Za-z0-9_]{3,16}$/;
@@ -47,26 +47,6 @@ function setNick(nick) {
   return { ok: true, settings };
 }
 
-// A friend's address: "name.e4mc.link", an IP, or either of them with ":port"
-const SERVER_RE = /^[A-Za-z0-9.-]+(:\d{1,5})?$/;
-
-function checkServer(server) {
-  if (typeof server !== 'string' || server.length === 0) return 'Введи адрес';
-  if (!SERVER_RE.test(server)) return 'Адрес выглядит так: abc-def.e4mc.link';
-  return null;
-}
-
-// Remembers the last address: friends usually join the same host again
-function setServer(server) {
-  const value = typeof server === 'string' ? server.trim() : server;
-  const error = checkServer(value);
-  if (error) return { ok: false, error };
-  const settings = load();
-  settings.server = value;
-  save(settings);
-  return { ok: true, settings };
-}
-
 function setMusic(on) {
   const settings = load();
   settings.music = !!on;
@@ -82,4 +62,4 @@ function setGraphics(level) {
   return { ok: true, settings };
 }
 
-module.exports = { load, setNick, checkNick, setServer, checkServer, setMusic, setGraphics };
+module.exports = { load, setNick, checkNick, setMusic, setGraphics };

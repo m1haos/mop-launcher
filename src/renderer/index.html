@@ -50,22 +50,6 @@
     </form>
   </dialog>
 
-  <dialog id="join-dialog" class="nick-dialog">
-    <form id="join-form" method="dialog" novalidate>
-      <h2>Присоединиться к другу</h2>
-      <p class="nick-help">Друг запускает карту, открывает её для сети и присылает адрес из своего лаунчера.</p>
-      <label class="field">
-        <span class="field-label">Адрес</span>
-        <input id="join-input" name="address" maxlength="255" autocomplete="off" spellcheck="false" placeholder="Например, abc-def.e4mc.link">
-      </label>
-      <p id="join-error" class="field-error" role="alert"></p>
-      <div class="dialog-actions">
-        <button id="join-cancel" class="btn-quiet" type="button">Отмена</button>
-        <button class="btn-push" type="submit"><span>Войти</span></button>
-      </div>
-    </form>
-  </dialog>
-
   <template id="tpl-library">
     <section class="library">
       <h1 class="library-title">Игры</h1>
@@ -102,7 +86,6 @@
           <div class="game-actions">
             <div class="game-buttons">
               <button class="btn-push btn-play" type="button"><span>Установить</span></button>
-              <button class="btn-quiet btn-join" type="button" hidden>Присоединиться к другу</button>
             </div>
             <div class="graphics" hidden>
               <span class="graphics-label">Графика</span>

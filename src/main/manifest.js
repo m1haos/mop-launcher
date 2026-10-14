@@ -49,6 +49,11 @@ function readLocal(rel, base) {
 }
 
 // The installer puts dist-pack/ next to app.asar (extraResources in package.json)
+function bundledDir() {
+  const rel = config().bundled;
+  return rel ? path.dirname(path.resolve(app.isPackaged ? process.resourcesPath : app.getAppPath(), rel)) : null;
+}
+
 function bundled(rel) {
   if (!rel) return null;
   try {
@@ -82,4 +87,4 @@ async function load() {
   }
 }
 
-module.exports = { load };
+module.exports = { load, bundledDir };

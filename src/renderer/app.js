@@ -8,11 +8,6 @@ const nickForm = document.getElementById('nick-form');
 const nickInput = document.getElementById('nick-input');
 const nickError = document.getElementById('nick-error');
 const nickCancel = document.getElementById('nick-cancel');
-const joinDialog = document.getElementById('join-dialog');
-const joinForm = document.getElementById('join-form');
-const joinInput = document.getElementById('join-input');
-const joinError = document.getElementById('join-error');
-const joinCancel = document.getElementById('join-cancel');
 const musicToggle = document.getElementById('music-toggle');
 
 const state = {
@@ -197,7 +192,6 @@ function renderGame(map) {
     status: section.querySelector('.game-status'),
     progress: section.querySelector('.progress'),
     fill: section.querySelector('.progress-fill'),
-    join: section.querySelector('.btn-join'),
     hostPanel: section.querySelector('.host-panel'),
     hostAddress: section.querySelector('.host-address'),
     hostValue: section.querySelector('.host-address-value'),
@@ -207,14 +201,6 @@ function renderGame(map) {
   updateButton();
   updateHost();
   showGraphics(map.id);
-
-  gameView.join.addEventListener('click', () => {
-    if (!state.settings.nick) {
-      openNickDialog();
-      return;
-    }
-    openJoinDialog();
-  });
 
   gameView.hostCopy.addEventListener('click', async () => {
     const button = gameView.hostCopy;
@@ -291,38 +277,6 @@ async function showGraphics(id) {
   select(info.levels.find(l => l.id === info.chosen) || info.levels[0]);
 }
 
-// ---------- join a friend ----------
-
-function openJoinDialog() {
-  joinInput.value = state.settings.server || '';
-  joinError.textContent = '';
-  joinInput.removeAttribute('aria-invalid');
-  joinDialog.showModal();
-  joinInput.select();
-}
-
-joinCancel.addEventListener('click', () => joinDialog.close());
-
-joinInput.addEventListener('input', () => {
-  joinError.textContent = '';
-  joinInput.removeAttribute('aria-invalid');
-});
-
-joinForm.addEventListener('submit', e => {
-  e.preventDefault();
-  // Friends often paste the address with spaces or the brackets from the game chat
-  const address = joinInput.value.trim().replace(/^\[|\]$/g, '');
-  if (!address) {
-    joinError.textContent = 'Введи адрес';
-    joinInput.setAttribute('aria-invalid', 'true');
-    return;
-  }
-  const id = gameView.id;
-  state.settings = { ...state.settings, server: address };
-  joinDialog.close();
-  run(id, `Захожу к другу на ${address}…`, () => window.mop.join(id, address));
-});
-
 // ---------- install / play state ----------
 
 function updateButton() {
@@ -333,8 +287,6 @@ function updateButton() {
     : working ? (st.installed ? 'Запускаю…' : 'Устанавливаю…')
     : st.installed ? 'Играть' : 'Установить';
   gameView.button.disabled = working || !!st.running;
-  gameView.join.hidden = !st.installed || !!st.running;
-  gameView.join.disabled = working;
 }
 
 function updateHost() {

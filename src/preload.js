@@ -12,7 +12,6 @@ contextBridge.exposeInMainWorld('mop', {
   listMaps: () => ipcRenderer.invoke('maps:list'),
   getMapStatus: id => ipcRenderer.invoke('map:status', id),
   play: id => ipcRenderer.invoke('map:play', id),
-  join: (id, address) => ipcRenderer.invoke('map:join', id, address),
   copy: text => ipcRenderer.invoke('clipboard:write', text),
   openFolder: target => ipcRenderer.invoke('folder:open', target),
   onProgress: callback => ipcRenderer.on('progress', (_e, data) => callback(data)),

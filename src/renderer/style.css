@@ -352,8 +352,6 @@ button { font: inherit; color: inherit; }
 .btn-quiet:hover { color: var(--dust); background: rgba(255, 255, 255, 0.05); }
 .btn-quiet:disabled { opacity: 0.45; cursor: default; background: none; }
 
-.btn-join { padding: 13px 22px; border: 1px solid rgba(242, 177, 52, 0.45); color: var(--dust); }
-.btn-join:hover { border-color: var(--amber); }
 
 /* ---------- nick dialog ---------- */
 

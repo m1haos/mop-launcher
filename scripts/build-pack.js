@@ -235,10 +235,12 @@ function main() {
   fs.writeFileSync(path.join(OUT_DIR, packName), packBuffer);
 
   let cover = null;
+  let coverSha1 = null;
   const coverSrc = path.join(PACK_DIR, pack.cover || 'cover.png');
   if (fs.existsSync(coverSrc)) {
     cover = `${pack.id}-cover${path.extname(coverSrc)}`;
     fs.copyFileSync(coverSrc, path.join(OUT_DIR, cover));
+    coverSha1 = sha1(fs.readFileSync(coverSrc));
   }
 
   let world = null;
@@ -267,6 +269,8 @@ function main() {
       minecraft: pack.minecraft,
       neoforge: pack.neoforge,
       cover,
+      // The launcher keeps covers by this hash and does not download them again
+      coverSha1,
       pack: { url: packName, sha1: sha1(packBuffer), size: packBuffer.length },
       world,
     }],

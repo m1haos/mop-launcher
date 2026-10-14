@@ -65,7 +65,7 @@ npm.cmd run dist     # release/MOP-Launcher-Setup-<версия>.exe
 
 ## Иконка и музыка
 
-- Иконка: `build/icon.svg`. После правки выполните `npm.cmd run icon`: получатся `build/icon.png`
+- Иконка: пиксель-арт 32×32 в `build/make-icon-svg.js` (`node build/make-icon-svg.js` → `build/icon.svg`). Затем выполните `npm.cmd run icon`: получатся `build/icon.png`
   и `build/icon.ico` (её берёт сборка .exe; свой конвертер electron-builder на некоторых ПК падает
   с «WebAssembly.Memory(): could not allocate memory»).
 - Музыка: `src/renderer/assets/music.ogg` играет по кругу без паузы на стыке и затихает, пока идёт игра.
@@ -98,6 +98,7 @@ npm.cmd run pack:build   # собрать launcher/dist-pack/
 и `manifest.json`. Всё это загружается в один релиз GitHub.
 
 - Название, описание, версия карты и версия NeoForge хранятся в `pack/pack.json`.
+- Лаунчер хранит обложки по sha1 (`coverSha1` в манифесте) в `%APPDATA%MOP Launchercovers` и не качает их повторно.
 - Обложка рисуется из `pack/cover.svg`: после правки выполните `npm.cmd run cover`, получится `pack/cover.png`
   (1280×720, с плёночным зерном). Сборка берёт PNG.
 - `pack:lock` не трогает уже закреплённые версии. Обновить всё до свежих версий
