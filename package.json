@@ -10,7 +10,9 @@
     "pack:lock": "node scripts/lock.js",
     "pack:build": "node scripts/build-pack.js",
     "try:install": "node scripts/try-install.js",
-    "try:launch": "node scripts/try-launch.js"
+    "try:launch": "node scripts/try-launch.js",
+    "icon": "electron scripts/make-icon.js",
+    "dist": "node scripts/dist.js"
   },
   "dependencies": {
     "@xmcl/core": "2.15.1",
@@ -18,6 +20,50 @@
     "adm-zip": "0.6.1"
   },
   "devDependencies": {
-    "electron": "44.4.5"
+    "electron": "44.4.5",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "io.github.m1haos.moplauncher",
+    "productName": "MOP Launcher",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "config.json",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "MOP Launcher",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false,
+      "installerLanguages": [
+        "ru_RU"
+      ],
+      "language": "1049",
+      "artifactName": "MOP-Launcher-Setup-${version}.${ext}"
+    },
+    "extraResources": [
+      {
+        "from": "dist-pack",
+        "to": "dist-pack",
+        "filter": [
+          "manifest.json",
+          "*.mrpack",
+          "*.png",
+          "*.zip"
+        ]
+      }
+    ]
   }
 }

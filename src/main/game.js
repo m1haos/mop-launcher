@@ -443,8 +443,9 @@ function offlineUuid(nick) {
 }
 
 // Starts the game in <root>\instances\<map id>. Returns the Java process.
+// With world set, enters that world at once; with server set ("host" or "host:port"), joins that server.
 // The game output is copied to logs\launcher.log in that folder.
-async function start(dirs, { mapId, versionId, javaw, nick, memoryMb = 4096 }) {
+async function start(dirs, { mapId, versionId, javaw, nick, world, server, memoryMb = 4096 }) {
   const gamePath = path.join(dirs.instances, mapId);
   fs.mkdirSync(path.join(gamePath, 'logs'), { recursive: true });
   const uuid = offlineUuid(nick);
@@ -461,6 +462,10 @@ async function start(dirs, { mapId, versionId, javaw, nick, memoryMb = 4096 }) {
     launcherBrand: 'MOP Launcher',
     minMemory: 1024,
     maxMemory: memoryMb,
+    // Straight into the map world or the friend's game, past the main menu
+    extraMCArgs: server ? ['--quickPlayMultiplayer', server]
+      : world ? ['--quickPlaySingleplayer', world]
+      : [],
   });
 
   const log = fs.createWriteStream(path.join(gamePath, 'logs', 'launcher.log'));
@@ -468,6 +473,22 @@ async function start(dirs, { mapId, versionId, javaw, nick, memoryMb = 4096 }) {
   proc.stderr?.pipe(log, { end: false });
   proc.on('exit', () => log.end());
   return proc;
+}
+
+// When the host opens the world for the network, e4mc logs "Domain assigned: <name>.e4mc.link".
+// Calls back with that address every time it appears (after "/e4mc restart" it changes).
+function onHostAddress(proc, callback) {
+  for (const stream of [proc.stdout, proc.stderr]) {
+    let tail = '';
+    stream?.on('data', chunk => {
+      const lines = (tail + chunk).split('\n');
+      tail = lines.pop();
+      for (const line of lines) {
+        const found = /Domain assigned: (\S+)/.exec(line);
+        if (found) callback(found[1]);
+      }
+    });
+  }
 }
 
 // Newest crash report of a map, if the game left one
@@ -481,4 +502,4 @@ function lastCrashReport(dirs, mapId, since) {
   return files[0]?.file || null;
 }
 
-module.exports = { prepare, start, offlineUuid, lastCrashReport, describeError, errorDetails, dispatcher };
+module.exports = { prepare, start, onHostAddress, offlineUuid, lastCrashReport, describeError, errorDetails, downloadFile, dispatcher };

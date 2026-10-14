@@ -8,6 +8,12 @@ const nickForm = document.getElementById('nick-form');
 const nickInput = document.getElementById('nick-input');
 const nickError = document.getElementById('nick-error');
 const nickCancel = document.getElementById('nick-cancel');
+const joinDialog = document.getElementById('join-dialog');
+const joinForm = document.getElementById('join-form');
+const joinInput = document.getElementById('join-input');
+const joinError = document.getElementById('join-error');
+const joinCancel = document.getElementById('join-cancel');
+const musicToggle = document.getElementById('music-toggle');
 
 const state = {
   settings: { nick: '' },
@@ -15,6 +21,8 @@ const state = {
   offline: false,
   statuses: {},
   working: new Set(),
+  // map id -> address for friends while that map runs as a host; '' until e4mc gives one
+  hosts: {},
 };
 
 // Elements of the open game page; null on the library screen
@@ -87,6 +95,47 @@ nickForm.addEventListener('submit', async e => {
   nickDialog.close();
 });
 
+// ---------- music ----------
+
+// Web Audio instead of <audio loop>: it loops the track without a gap
+const MUSIC_VOLUME = 0.35;
+const music = { context: null, gain: null };
+
+async function startMusic() {
+  const data = await window.mop.getMusic();
+  if (!data) return;
+  const context = new AudioContext();
+  const source = context.createBufferSource();
+  source.buffer = await context.decodeAudioData(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength));
+  source.loop = true;
+  const gain = context.createGain();
+  gain.gain.value = 0;
+  source.connect(gain).connect(context.destination);
+  source.start();
+  Object.assign(music, { context, gain });
+  musicToggle.hidden = false;
+  updateMusic();
+}
+
+// Plays when it is switched on and no game is running: the game has its own sound
+function updateMusic() {
+  musicToggle.setAttribute('aria-pressed', String(state.settings.music));
+  musicToggle.title = state.settings.music ? 'Выключить музыку' : 'Включить музыку';
+  if (!music.context) return;
+  const playing = Object.values(state.statuses).some(st => st.running);
+  const target = state.settings.music && !playing ? MUSIC_VOLUME : 0;
+  const now = music.context.currentTime;
+  music.gain.gain.cancelScheduledValues(now);
+  music.gain.gain.setValueAtTime(music.gain.gain.value, now);
+  music.gain.gain.linearRampToValueAtTime(target, now + 1.5);
+}
+
+musicToggle.addEventListener('click', async () => {
+  const res = await window.mop.setMusic(!state.settings.music);
+  state.settings = res.settings;
+  updateMusic();
+});
+
 // ---------- library ----------
 
 function renderLibrary() {
@@ -148,34 +197,131 @@ function renderGame(map) {
     status: section.querySelector('.game-status'),
     progress: section.querySelector('.progress'),
     fill: section.querySelector('.progress-fill'),
+    join: section.querySelector('.btn-join'),
+    hostPanel: section.querySelector('.host-panel'),
+    hostAddress: section.querySelector('.host-address'),
+    hostValue: section.querySelector('.host-address-value'),
+    hostCopy: section.querySelector('.host-copy'),
+    graphics: section.querySelector('.graphics'),
   };
   updateButton();
+  updateHost();
+  showGraphics(map.id);
 
-  gameView.button.addEventListener('click', async () => {
+  gameView.join.addEventListener('click', () => {
     if (!state.settings.nick) {
       openNickDialog();
       return;
     }
-    const id = map.id;
-    const wasInstalled = state.statuses[id]?.installed;
-    state.working.add(id);
-    updateButton();
-    setStatus(id, wasInstalled ? 'Запускаю…' : 'Готовлю установку…');
-    try {
-      const res = await window.mop.play(id);
-      state.statuses[id] = await window.mop.getMapStatus(id);
-      setStatus(id, res.message || '', res.ok ? 'ok' : res.error ? 'error' : '');
-    } catch (err) {
-      setStatus(id, err.message, 'error');
-    } finally {
-      state.working.delete(id);
-      showProgress(id, null);
-      updateButton();
+    openJoinDialog();
+  });
+
+  gameView.hostCopy.addEventListener('click', async () => {
+    const button = gameView.hostCopy;
+    await window.mop.copy(state.hosts[map.id]);
+    button.textContent = 'Скопировано';
+    setTimeout(() => { button.textContent = 'Копировать'; }, 1500);
+  });
+
+  gameView.button.addEventListener('click', () => {
+    if (!state.settings.nick) {
+      openNickDialog();
+      return;
     }
+    const installed = state.statuses[map.id]?.installed;
+    run(map.id, installed ? 'Запускаю…' : 'Готовлю установку…', () => window.mop.play(map.id));
   });
 
   show(section);
 }
+
+// Runs one install or launch of a map and shows how it went
+async function run(id, startText, action) {
+  state.working.add(id);
+  updateButton();
+  setStatus(id, startText);
+  try {
+    const res = await action();
+    state.statuses[id] = await window.mop.getMapStatus(id);
+    setStatus(id, res.message || '', res.ok ? 'ok' : res.error ? 'error' : '');
+    if (gameView && gameView.id === id) showGraphics(id);
+  } catch (err) {
+    setStatus(id, err.message, 'error');
+  } finally {
+    state.working.delete(id);
+    showProgress(id, null);
+    updateButton();
+  }
+}
+
+// ---------- graphics level ----------
+
+// The levels come from the installed map, so the switch appears after the install
+async function showGraphics(id) {
+  const info = await window.mop.getGraphics(id);
+  if (!gameView || gameView.id !== id) return;
+  const box = gameView.graphics;
+  box.hidden = !info;
+  if (!info) return;
+
+  const options = box.querySelector('.graphics-options');
+  const hint = box.querySelector('.graphics-hint');
+  const select = level => {
+    for (const button of options.children) button.setAttribute('aria-checked', String(button.dataset.level === level.id));
+    hint.textContent = state.statuses[id]?.running
+      ? `${level.hint}. Сработает при следующем запуске.`
+      : level.hint;
+  };
+
+  options.replaceChildren();
+  for (const level of info.levels) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'graphics-option';
+    button.setAttribute('role', 'radio');
+    button.dataset.level = level.id;
+    button.textContent = level.title;
+    button.addEventListener('click', async () => {
+      const res = await window.mop.setGraphics(level.id);
+      if (res.ok) state.settings = res.settings;
+      select(level);
+    });
+    options.append(button);
+  }
+  select(info.levels.find(l => l.id === info.chosen) || info.levels[0]);
+}
+
+// ---------- join a friend ----------
+
+function openJoinDialog() {
+  joinInput.value = state.settings.server || '';
+  joinError.textContent = '';
+  joinInput.removeAttribute('aria-invalid');
+  joinDialog.showModal();
+  joinInput.select();
+}
+
+joinCancel.addEventListener('click', () => joinDialog.close());
+
+joinInput.addEventListener('input', () => {
+  joinError.textContent = '';
+  joinInput.removeAttribute('aria-invalid');
+});
+
+joinForm.addEventListener('submit', e => {
+  e.preventDefault();
+  // Friends often paste the address with spaces or the brackets from the game chat
+  const address = joinInput.value.trim().replace(/^\[|\]$/g, '');
+  if (!address) {
+    joinError.textContent = 'Введи адрес';
+    joinInput.setAttribute('aria-invalid', 'true');
+    return;
+  }
+  const id = gameView.id;
+  state.settings = { ...state.settings, server: address };
+  joinDialog.close();
+  run(id, `Захожу к другу на ${address}…`, () => window.mop.join(id, address));
+});
 
 // ---------- install / play state ----------
 
@@ -187,6 +333,17 @@ function updateButton() {
     : working ? (st.installed ? 'Запускаю…' : 'Устанавливаю…')
     : st.installed ? 'Играть' : 'Установить';
   gameView.button.disabled = working || !!st.running;
+  gameView.join.hidden = !st.installed || !!st.running;
+  gameView.join.disabled = working;
+}
+
+function updateHost() {
+  if (!gameView) return;
+  const address = state.hosts[gameView.id];
+  gameView.hostPanel.hidden = address === undefined;
+  gameView.hostAddress.hidden = !address;
+  gameView.hostValue.textContent = address || '';
+  if (address !== undefined) gameView.hostPanel.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 
 function setStatus(id, text, kind = '') {
@@ -214,9 +371,15 @@ window.mop.onProgress(({ id, text, progress, total }) => {
   }
 });
 
-window.mop.onGame(({ id, running, code, crash, logs }) => {
+window.mop.onGame(({ id, running, host, address, code, crash, logs }) => {
   state.statuses[id] = { ...state.statuses[id], running };
+  if (!running) delete state.hosts[id];
+  else if (address) state.hosts[id] = address;
+  else if (host) state.hosts[id] = '';
   updateButton();
+  updateHost();
+  updateMusic();
+  if (address) return;
   if (running || code === 0 || code === null) {
     if (!running) setStatus(id, '');
     return;
@@ -259,6 +422,7 @@ async function loadMaps() {
 async function start() {
   state.settings = await window.mop.getSettings();
   showNick();
+  startMusic().catch(err => console.error('music:', err));
   await loadMaps();
   if (!state.settings.nick) openNickDialog();
 }

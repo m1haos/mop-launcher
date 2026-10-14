@@ -1,5 +1,8 @@
 // Loads the list of maps.
-// config.json -> "manifest": a link (https://...) or a file path relative to the launcher folder.
+// config.json -> "manifest": a link (https://...) or a file path relative to the launcher folder;
+//                "bundled": the manifest that ships inside the installer (dist-pack/ at build time).
+// Order: the link, then the copy from the last successful download, then the bundled one,
+// so a fresh install shows the maps even before the first GitHub release or without internet.
 // Links inside the manifest (cover, pack, world) may be relative to the manifest itself.
 
 const fs = require('fs');
@@ -39,13 +42,27 @@ async function download(url) {
   return check(await res.json());
 }
 
+function readLocal(rel, base) {
+  const file = path.resolve(base, rel);
+  const manifest = check(JSON.parse(fs.readFileSync(file, 'utf8')));
+  return resolveLinks(manifest, pathToFileURL(file).href);
+}
+
+// The installer puts dist-pack/ next to app.asar (extraResources in package.json)
+function bundled(rel) {
+  if (!rel) return null;
+  try {
+    return readLocal(rel, app.isPackaged ? process.resourcesPath : app.getAppPath());
+  } catch {
+    return null;
+  }
+}
+
 async function load() {
-  const source = config().manifest;
+  const { manifest: source, bundled: bundledRel } = config();
 
   if (!/^https?:\/\//.test(source)) {
-    const file = path.resolve(app.getAppPath(), source);
-    const manifest = check(JSON.parse(fs.readFileSync(file, 'utf8')));
-    return { maps: resolveLinks(manifest, pathToFileURL(file).href), offline: false };
+    return { maps: readLocal(source, app.getAppPath()), offline: false };
   }
 
   try {
@@ -59,6 +76,8 @@ async function load() {
       const manifest = JSON.parse(fs.readFileSync(cacheFile(), 'utf8'));
       return { maps: resolveLinks(manifest, source), offline: true };
     }
+    const maps = bundled(bundledRel);
+    if (maps) return { maps, offline: false };
     throw new Error(`Не удалось загрузить список игр: ${err.message}`);
   }
 }

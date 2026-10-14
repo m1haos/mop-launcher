@@ -5,10 +5,20 @@
 
 const fs = require('fs');
 const path = require('path');
+const { pathToFileURL } = require('url');
 const paths = require('../src/main/paths');
 const game = require('../src/main/game');
+const packInstaller = require('../src/main/pack');
+const stateFile = require('../src/main/state');
 
 const pack = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'pack', 'pack.json'), 'utf8'));
+// The built pack (npm run pack:build), the same one the launcher reads from the manifest
+const built = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'dist-pack', 'manifest.json'), 'utf8')).maps[0];
+const map = {
+  ...pack,
+  version: built.version,
+  pack: { ...built.pack, url: pathToFileURL(path.join(__dirname, '..', 'dist-pack', built.pack.url)).href },
+};
 const dirs = paths.layout(paths.gameRoot());
 
 // One line per step and per 5 %, not hundreds of lines
@@ -37,6 +47,12 @@ process.on('beforeExit', () => {
   console.log(`Done in ${Math.round((Date.now() - started) / 1000)} s`);
   console.log(`Version: ${versionId}`);
   console.log(`Java: ${java.java}`);
+
+  const state = stateFile.load(dirs.state);
+  const { files } = await packInstaller.installPack(dirs, map, state.maps[map.id]?.files, report);
+  state.maps[map.id] = { version: map.version, minecraft: map.minecraft, neoforge: map.neoforge, pack: map.pack.sha1, files };
+  stateFile.save(dirs.state, state);
+  console.log(`Pack: ${files.length} files in ${path.join(dirs.instances, map.id)}`);
 })().catch(err => {
   finished = true;
   console.error(`\nFAILED: ${game.describeError(err)}`);

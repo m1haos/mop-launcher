@@ -16,10 +16,19 @@
       </svg>
       <span>MOP Launcher</span>
     </div>
-    <button id="nick-chip" class="nick-chip" type="button" hidden>
-      <span class="nick-chip-label">Ник</span>
-      <span id="nick-value" class="nick-chip-value"></span>
-    </button>
+    <div class="bar-right">
+      <button id="music-toggle" class="music-toggle" type="button" aria-pressed="true" title="Музыка" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path class="speaker" d="M4 9h4l5-4v14l-5-4H4Z" />
+          <path class="waves" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12" />
+          <path class="cross" d="m16.5 9.5 5 5m0-5-5 5" />
+        </svg>
+      </button>
+      <button id="nick-chip" class="nick-chip" type="button" hidden>
+        <span class="nick-chip-label">Ник</span>
+        <span id="nick-value" class="nick-chip-value"></span>
+      </button>
+    </div>
   </header>
 
   <main id="view" class="view"></main>
@@ -37,6 +46,22 @@
       <div class="dialog-actions">
         <button id="nick-cancel" class="btn-quiet" type="button">Отмена</button>
         <button class="btn-push" type="submit"><span>Сохранить</span></button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="join-dialog" class="nick-dialog">
+    <form id="join-form" method="dialog" novalidate>
+      <h2>Присоединиться к другу</h2>
+      <p class="nick-help">Друг запускает карту, открывает её для сети и присылает адрес из своего лаунчера.</p>
+      <label class="field">
+        <span class="field-label">Адрес</span>
+        <input id="join-input" name="address" maxlength="255" autocomplete="off" spellcheck="false" placeholder="Например, abc-def.e4mc.link">
+      </label>
+      <p id="join-error" class="field-error" role="alert"></p>
+      <div class="dialog-actions">
+        <button id="join-cancel" class="btn-quiet" type="button">Отмена</button>
+        <button class="btn-push" type="submit"><span>Войти</span></button>
       </div>
     </form>
   </dialog>
@@ -75,9 +100,25 @@
           <ul class="game-facts"></ul>
           <div class="game-desc"></div>
           <div class="game-actions">
-            <button class="btn-push btn-play" type="button"><span>Установить</span></button>
+            <div class="game-buttons">
+              <button class="btn-push btn-play" type="button"><span>Установить</span></button>
+              <button class="btn-quiet btn-join" type="button" hidden>Присоединиться к другу</button>
+            </div>
+            <div class="graphics" hidden>
+              <span class="graphics-label">Графика</span>
+              <div class="graphics-options" role="radiogroup" aria-label="Графика"></div>
+              <p class="graphics-hint"></p>
+            </div>
             <div class="progress" hidden><div class="progress-fill"></div></div>
             <p class="game-status" role="status"></p>
+            <div class="host-panel" hidden>
+              <p class="host-hint">Позвать друзей: в игре нажми Esc → «Открыть для сети» и запусти. Адрес появится здесь.</p>
+              <div class="host-address" hidden>
+                <span class="host-address-label">Адрес для друзей</span>
+                <code class="host-address-value"></code>
+                <button class="btn-quiet host-copy" type="button">Копировать</button>
+              </div>
+            </div>
           </div>
         </div>
       </div>

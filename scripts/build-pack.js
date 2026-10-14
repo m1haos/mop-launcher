@@ -48,6 +48,34 @@ function addFolder(zip, srcDir, zipDir) {
   return count;
 }
 
+// The world the author put into world/ (level.dat at the top or in one folder).
+// Left out: our datapack (it travels with the pack and is refreshed on every update),
+// the author's own progress and files the game rewrites.
+const WORLD_SKIP = /^(readme\..*|session\.lock|level\.dat_old|playerdata|stats|advancements|datapacks\/mop2)(\/|$)/i;
+
+function findWorld() {
+  const dir = path.join(ROOT, 'world');
+  if (fs.existsSync(path.join(dir, 'level.dat'))) return dir;
+  if (!fs.existsSync(dir)) return null;
+  const sub = fs.readdirSync(dir, { withFileTypes: true })
+    .find(item => item.isDirectory() && fs.existsSync(path.join(dir, item.name, 'level.dat')));
+  return sub ? path.join(dir, sub.name) : null;
+}
+
+function addWorld(zip, srcDir, rel = '') {
+  let count = 0;
+  for (const item of fs.readdirSync(path.join(srcDir, rel), { withFileTypes: true })) {
+    const itemRel = rel ? `${rel}/${item.name}` : item.name;
+    if (WORLD_SKIP.test(itemRel)) continue;
+    if (item.isDirectory()) count += addWorld(zip, srcDir, itemRel);
+    else {
+      zip.addFile(itemRel, fs.readFileSync(path.join(srcDir, itemRel)));
+      count++;
+    }
+  }
+  return count;
+}
+
 function lockEntry(lock, slug) {
   const entry = lock.mods.find(m => m.slug === slug);
   if (!entry) throw new Error(`"${slug}" is not in modlist.lock.json: add it to modlist.json and run npm run pack:lock`);
@@ -72,15 +100,62 @@ function buildIndex(pack, files) {
   };
 }
 
-// options.txt for the first start: Russian language and our resource packs on.
-// The launcher writes it only if the player has no options.txt yet.
-function defaultOptions(pack, lock) {
+function resourcePacks(pack, lock) {
   const packs = ['vanilla', 'mod_resources'];
   for (const name of pack.resourcepacks) {
     const local = path.join(PACK_DIR, 'resourcepacks', name);
     packs.push(fs.existsSync(local) ? `file/${name}` : `file/${lockEntry(lock, name).file}`);
   }
-  return `lang:ru_ru\nresourcePacks:${JSON.stringify(packs)}\n`;
+  return packs;
+}
+
+// "KEY=value" lines of an Iris shader settings file
+function parseShaderProfile(text) {
+  const out = {};
+  for (const line of text.split(/\r?\n/)) {
+    const m = /^([^#=\s][^=]*)=(.*)$/.exec(line.trim());
+    if (m) out[m[1]] = m[2];
+  }
+  return out;
+}
+
+function shaderText(values) {
+  return Object.entries(values).map(([key, value]) => `${key}=${value}`).join('\n') + '\n';
+}
+
+// pack/graphics.json -> overrides/mop-graphics.json, read by the launcher (src/main/graphics.js).
+// Each level gets the whole shader file: our look (pack.shader.profile) with the level on top.
+function compileGraphics(pack, lock) {
+  const file = path.join(PACK_DIR, 'graphics.json');
+  if (!fs.existsSync(file)) return null;
+  const src = readJson(file);
+  const look = pack.shader ? parseShaderProfile(fs.readFileSync(path.join(PACK_DIR, pack.shader.profile), 'utf8')) : null;
+  const levels = {};
+  for (const [id, level] of Object.entries(src.levels)) {
+    levels[id] = {
+      title: level.title,
+      hint: level.hint,
+      options: level.options || {},
+      sodium: level.sodium || null,
+      shader: look ? shaderText({ ...look, ...level.shader }) : null,
+    };
+  }
+  if (!levels[src.default]) throw new Error(`graphics.json: no level "${src.default}" for "default"`);
+  return {
+    default: src.default,
+    shaderFile: pack.shader ? lockEntry(lock, pack.shader.slug).file : null,
+    common: { ...src.common, resourcePacks: JSON.stringify(resourcePacks(pack, lock)) },
+    levels,
+  };
+}
+
+// options.txt for Prism and other launchers: common settings and the default level.
+// Our launcher writes these keys into options.txt itself (src/main/graphics.js).
+function defaultOptions(pack, lock, graphics) {
+  const values = graphics
+    ? { ...graphics.common, ...graphics.levels[graphics.default].options }
+    : { lang: 'ru_ru', resourcePacks: JSON.stringify(resourcePacks(pack, lock)) };
+  return Object.entries(values).map(([key, value]) => `${key}:${value}`).join('\n') + '\n';
 }
 
 function main() {
@@ -104,16 +179,30 @@ function main() {
     if (fs.existsSync(local)) count += addFolder(zip, local, `overrides/resourcepacks/${name}`);
   }
 
+  const graphics = compileGraphics(pack, lock);
+  if (graphics) {
+    zip.addFile('overrides/mop-graphics.json', Buffer.from(JSON.stringify(graphics, null, 2), 'utf8'));
+    count++;
+  }
+
   if (pack.shader) {
     const shader = lockEntry(lock, pack.shader.slug);
     // Iris reads shader settings from "<shader file name>.txt" next to the shader
-    zip.addFile(`overrides/shaderpacks/${shader.file}.txt`, fs.readFileSync(path.join(PACK_DIR, pack.shader.profile)));
+    const profile = graphics?.levels[graphics.default].shader
+      ?? fs.readFileSync(path.join(PACK_DIR, pack.shader.profile), 'utf8');
+    zip.addFile(`overrides/shaderpacks/${shader.file}.txt`, Buffer.from(profile, 'utf8'));
     if (!fs.existsSync(path.join(PACK_DIR, 'config', 'iris.properties'))) {
       zip.addFile('overrides/config/iris.properties', Buffer.from(`enableShaders=true\nshaderPack=${shader.file}\n`, 'utf8'));
     }
     count++;
   }
-  zip.addFile('overrides/options.txt', Buffer.from(defaultOptions(pack, lock), 'utf8'));
+  // The datapack lives inside the world, so it only goes in when the map ships a world
+  const worldDir = pack.world ? findWorld() : null;
+  if (pack.world && !worldDir) console.log('Note: pack.json has "world", but world/ has no level.dat: building without a world.');
+  if (worldDir) {
+    count += addFolder(zip, path.join(PACK_DIR, 'datapacks', 'mop2'), `overrides/saves/${pack.world.folder}/datapacks/mop2`);
+  }
+  zip.addFile('overrides/options.txt', Buffer.from(defaultOptions(pack, lock, graphics), 'utf8'));
   count++;
 
   fs.mkdirSync(OUT_DIR, { recursive: true });
@@ -126,6 +215,17 @@ function main() {
   if (fs.existsSync(coverSrc)) {
     cover = `${pack.id}-cover${path.extname(coverSrc)}`;
     fs.copyFileSync(coverSrc, path.join(OUT_DIR, cover));
+  }
+
+  let world = null;
+  if (worldDir) {
+    const worldZip = new AdmZip();
+    const worldFiles = addWorld(worldZip, worldDir);
+    const buffer = worldZip.toBuffer();
+    const worldName = `${pack.id}-world.zip`;
+    fs.writeFileSync(path.join(OUT_DIR, worldName), buffer);
+    world = { url: worldName, sha1: sha1(buffer), size: buffer.length, folder: pack.world.folder };
+    console.log(`${worldName}: ${worldFiles} files, ${(buffer.length / 1048576).toFixed(1)} MB`);
   }
 
   // Links are relative: the launcher resolves them against the manifest URL,
@@ -144,7 +244,7 @@ function main() {
       neoforge: pack.neoforge,
       cover,
       pack: { url: packName, sha1: sha1(packBuffer), size: packBuffer.length },
-      world: null,
+      world,
     }],
   };
   fs.writeFileSync(path.join(OUT_DIR, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n', 'utf8');

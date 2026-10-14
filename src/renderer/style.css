@@ -62,6 +62,28 @@ button { font: inherit; color: inherit; }
 .brand-mark circle { fill: var(--brand); }
 .brand-mark path { fill: var(--amber); }
 
+.bar-right { display: flex; align-items: center; gap: 10px; }
+
+.music-toggle {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid var(--panel-edge);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--dust);
+  cursor: pointer;
+}
+.music-toggle:hover { border-color: rgba(242, 177, 52, 0.5); }
+.music-toggle svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.music-toggle .speaker { fill: currentColor; }
+.music-toggle .cross { display: none; }
+.music-toggle[aria-pressed="false"] { color: var(--dust-dim); }
+.music-toggle[aria-pressed="false"] .waves { display: none; }
+.music-toggle[aria-pressed="false"] .cross { display: inline; }
+
 .nick-chip {
   display: flex;
   align-items: baseline;
@@ -225,6 +247,42 @@ button { font: inherit; color: inherit; }
 
 .game-actions { margin-top: 28px; }
 
+.game-buttons { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
+
+.graphics { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 18px; }
+.graphics-label { color: var(--dust-dim); font-size: 14px; }
+.graphics-options {
+  display: flex;
+  padding: 3px;
+  border: 1px solid var(--panel-edge);
+  border-radius: var(--radius-m);
+  background: rgba(255, 255, 255, 0.03);
+}
+.graphics-option {
+  padding: 6px 14px;
+  border: 0;
+  border-radius: var(--radius-s);
+  background: none;
+  color: var(--dust-dim);
+  cursor: pointer;
+}
+.graphics-option:hover { color: var(--dust); }
+.graphics-option[aria-checked="true"] { background: rgba(242, 177, 52, 0.16); color: var(--amber); }
+.graphics-hint { width: 100%; margin: 0; color: var(--dust-dim); font-size: 13px; }
+
+.host-panel {
+  max-width: 60ch;
+  margin-top: 16px;
+  padding: 14px 16px;
+  border: 1px solid rgba(242, 177, 52, 0.3);
+  border-radius: 8px;
+  background: rgba(242, 177, 52, 0.06);
+}
+.host-hint { margin: 0; color: #cfc9bd; font-size: 14px; }
+.host-address { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 12px; }
+.host-address-label { width: 100%; color: var(--dust-dim); font-size: 13px; }
+.host-address-value { font-size: 18px; font-weight: 600; color: var(--amber); user-select: all; }
+
 .game-status { min-height: 1.5em; margin: 12px 0 0; color: var(--dust-dim); font-size: 14px; }
 .game-status.is-error { color: var(--red); }
 .game-status.is-ok { color: var(--teal); }
@@ -292,6 +350,10 @@ button { font: inherit; color: inherit; }
   cursor: pointer;
 }
 .btn-quiet:hover { color: var(--dust); background: rgba(255, 255, 255, 0.05); }
+.btn-quiet:disabled { opacity: 0.45; cursor: default; background: none; }
+
+.btn-join { padding: 13px 22px; border: 1px solid rgba(242, 177, 52, 0.45); color: var(--dust); }
+.btn-join:hover { border-color: var(--amber); }
 
 /* ---------- nick dialog ---------- */
 

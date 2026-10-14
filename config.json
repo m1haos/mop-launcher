@@ -1,3 +1,4 @@
 {
-  "manifest": "dev-manifest.json"
+  "manifest": "https://github.com/m1haos/mop-launcher/releases/latest/download/manifest.json",
+  "bundled": "dist-pack/manifest.json"
 }

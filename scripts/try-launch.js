@@ -26,6 +26,9 @@ function report({ text }) {
   const proc = await game.start(dirs, { mapId: pack.id, versionId, javaw: java.java, nick });
   proc.stdout.pipe(process.stdout);
   proc.stderr.pipe(process.stderr);
+  game.onHostAddress(proc, address => console.log(`
+>>> Address for friends: ${address}
+`));
   proc.on('exit', code => console.log(`\nGame exited with code ${code}`));
 })().catch(err => {
   console.error(`\nFAILED: ${game.describeError(err)}`);
