@@ -92,7 +92,8 @@ npm.cmd run pack:build   # собрать launcher/dist-pack/
 и `manifest.json`. Всё это загружается в один релиз GitHub.
 
 - Название, описание, версия карты и версия NeoForge хранятся в `pack/pack.json`.
-- Обложка лежит в `pack/cover.png` (16:9, например 1280×720). Сейчас там временная.
+- Обложка рисуется из `pack/cover.svg`: после правки выполните `npm.cmd run cover`, получится `pack/cover.png`
+  (1280×720, с плёночным зерном). Сборка берёт PNG.
 - `pack:lock` не трогает уже закреплённые версии. Обновить всё до свежих версий
   можно через `tools/sync-mods.ps1 -Update`.
 

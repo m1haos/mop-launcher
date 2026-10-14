@@ -12,7 +12,8 @@
     "try:install": "node scripts/try-install.js",
     "try:launch": "node scripts/try-launch.js",
     "icon": "electron scripts/make-icon.js",
-    "dist": "node scripts/dist.js"
+    "dist": "node scripts/dist.js",
+    "cover": "electron scripts/render-cover.js"
   },
   "dependencies": {
     "@xmcl/core": "2.15.1",
