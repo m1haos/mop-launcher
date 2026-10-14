@@ -98,7 +98,7 @@ npm.cmd run pack:build   # собрать launcher/dist-pack/
 и `manifest.json`. Всё это загружается в один релиз GitHub.
 
 - Название, описание, версия карты и версия NeoForge хранятся в `pack/pack.json`.
-- Лаунчер хранит обложки по sha1 (`coverSha1` в манифесте) в `%APPDATA%MOP Launchercovers` и не качает их повторно.
+- Лаунчер хранит обложки по sha1 (`coverSha1` в манифесте) в `%APPDATA%\MOP Launcher\covers` и не качает их повторно.
 - Обложка рисуется из `pack/cover.svg`: после правки выполните `npm.cmd run cover`, получится `pack/cover.png`
   (1280×720, с плёночным зерном). Сборка берёт PNG.
 - `pack:lock` не трогает уже закреплённые версии. Обновить всё до свежих версий
