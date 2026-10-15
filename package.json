@@ -62,7 +62,9 @@
           "manifest.json",
           "*.mrpack",
           "*.png",
-          "*.zip"
+          "*.zip",
+          "!mop1-*.mrpack",
+          "!mop1-*.zip"
         ]
       }
     ]
