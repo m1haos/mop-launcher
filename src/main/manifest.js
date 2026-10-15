@@ -67,6 +67,12 @@ function readLocal(rel, base) {
   return resolveLinks(manifest, pathToFileURL(file).href);
 }
 
+// Paths in config.json are relative to the launcher: the project folder in development,
+// the resources folder of an installed launcher (dist-pack/ lies there, next to app.asar)
+function appDir() {
+  return app.isPackaged ? process.resourcesPath : app.getAppPath();
+}
+
 // The installer puts dist-pack/ next to app.asar (extraResources in package.json)
 function bundledDir() {
   const rel = config().bundled;
@@ -85,7 +91,7 @@ function bundled(rel) {
 // The list that is on disk right now, without the network; null if there is none
 function loadLocal() {
   const { manifest: source, bundled: bundledRel } = config();
-  if (!isLink(source)) return { ...readLocal(source, app.getAppPath()), offline: false };
+  if (!isLink(source)) return { ...readLocal(source, appDir()), offline: false };
   try {
     const manifest = check(JSON.parse(fs.readFileSync(cacheFile(), 'utf8')));
     return { ...resolveLinks(manifest, source), offline: false };
@@ -109,7 +115,7 @@ async function load() {
   const { manifest: source, bundled: bundledRel } = config();
 
   if (!isLink(source)) {
-    return { ...readLocal(source, app.getAppPath()), offline: false };
+    return { ...readLocal(source, appDir()), offline: false };
   }
 
   try {
