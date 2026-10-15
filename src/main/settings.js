@@ -1,11 +1,11 @@
-// Player settings in %APPDATA%\MOP Launcher\settings.json
+// Player settings in %APPDATA%\MG Launcher\settings.json
 
 const fs = require('fs');
 const path = require('path');
 const { app } = require('electron');
 
 // graphics: level id from mop-graphics.json of the map; empty means the default of the map
-const DEFAULTS = { nick: '', music: true, graphics: '' };
+const DEFAULTS = { nick: '', music: true, musicVolume: 75, graphics: '' };
 
 // Minecraft accepts 3-16 characters: latin letters, digits, underscore
 const NICK_RE = /^[A-Za-z0-9_]{3,16}$/;
@@ -54,6 +54,14 @@ function setMusic(on) {
   return { ok: true, settings };
 }
 
+function setMusicVolume(volume) {
+  if (!Number.isFinite(volume)) return { ok: false, error: 'Громкость должна быть числом' };
+  const settings = load();
+  settings.musicVolume = Math.round(Math.min(100, Math.max(0, volume)));
+  save(settings);
+  return { ok: true, settings };
+}
+
 function setGraphics(level) {
   if (typeof level !== 'string' || !/^[a-z0-9_-]{0,32}$/.test(level)) return { ok: false, error: 'Неизвестный уровень графики' };
   const settings = load();
@@ -62,4 +70,4 @@ function setGraphics(level) {
   return { ok: true, settings };
 }
 
-module.exports = { load, setNick, checkNick, setMusic, setGraphics };
+module.exports = { load, setNick, checkNick, setMusic, setMusicVolume, setGraphics };

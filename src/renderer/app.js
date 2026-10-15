@@ -8,11 +8,17 @@ const nickForm = document.getElementById('nick-form');
 const nickInput = document.getElementById('nick-input');
 const nickError = document.getElementById('nick-error');
 const nickCancel = document.getElementById('nick-cancel');
+const musicBox = document.getElementById('music');
 const musicToggle = document.getElementById('music-toggle');
+const musicVolume = document.getElementById('music-volume');
 
 const state = {
   settings: { nick: '' },
   maps: [],
+  // projects of the studio; each lists its maps as chapters
+  games: [],
+  // game id -> chapter (map id) open on its page
+  chapter: {},
   offline: false,
   statuses: {},
   working: new Set(),
@@ -93,7 +99,8 @@ nickForm.addEventListener('submit', async e => {
 // ---------- music ----------
 
 // Web Audio instead of <audio loop>: it loops the track without a gap
-const MUSIC_VOLUME = 0.22;
+// Gain at 100 on the slider; the slider is squared so its middle sounds like the middle
+const MUSIC_MAX_GAIN = 0.4;
 const music = { context: null, gain: null };
 
 async function startMusic() {
@@ -108,21 +115,25 @@ async function startMusic() {
   source.connect(gain).connect(context.destination);
   source.start();
   Object.assign(music, { context, gain });
-  musicToggle.hidden = false;
+  musicBox.hidden = false;
   updateMusic();
 }
 
 // Plays when it is switched on and no game is running: the game has its own sound
-function updateMusic() {
+function updateMusic(fade = 1.5) {
+  const volume = state.settings.musicVolume ?? 75;
   musicToggle.setAttribute('aria-pressed', String(state.settings.music));
   musicToggle.title = state.settings.music ? 'Выключить музыку' : 'Включить музыку';
+  if (document.activeElement !== musicVolume) musicVolume.value = String(volume);
+  musicVolume.disabled = !state.settings.music;
+  musicVolume.style.setProperty('--fill', `${volume}%`);
   if (!music.context) return;
   const playing = Object.values(state.statuses).some(st => st.running);
-  const target = state.settings.music && !playing ? MUSIC_VOLUME : 0;
+  const target = state.settings.music && !playing ? MUSIC_MAX_GAIN * (volume / 100) ** 2 : 0;
   const now = music.context.currentTime;
   music.gain.gain.cancelScheduledValues(now);
   music.gain.gain.setValueAtTime(music.gain.gain.value, now);
-  music.gain.gain.linearRampToValueAtTime(target, now + 1.5);
+  music.gain.gain.linearRampToValueAtTime(target, now + fade);
 }
 
 musicToggle.addEventListener('click', async () => {
@@ -131,7 +142,22 @@ musicToggle.addEventListener('click', async () => {
   updateMusic();
 });
 
+// Heard while dragging, saved when released
+musicVolume.addEventListener('input', () => {
+  state.settings.musicVolume = Number(musicVolume.value);
+  updateMusic(0.1);
+});
+musicVolume.addEventListener('change', async () => {
+  const res = await window.mop.setMusicVolume(Number(musicVolume.value));
+  if (res.ok) state.settings = res.settings;
+  updateMusic(0.1);
+});
+
 // ---------- library ----------
+
+const mapById = id => state.maps.find(m => m.id === id);
+const chaptersOf = game => game.chapters.map(mapById).filter(Boolean);
+const gameOf = mapId => state.games.find(g => g.chapters.includes(mapId));
 
 function renderLibrary() {
   gameView = null;
@@ -145,30 +171,78 @@ function renderLibrary() {
     section.insertBefore(note, grid);
   }
 
-  for (const map of state.maps) {
+  for (const game of state.games) {
+    const chapters = chaptersOf(game);
+    if (!chapters.length) continue;
+    const latest = chapters[chapters.length - 1];
+    const installed = chapters.filter(m => state.statuses[m.id]?.installed).length;
     const item = fromTemplate('tpl-card');
-    const installed = state.statuses[map.id]?.installed;
-    item.querySelector('.card-cover').src = map.cover || '';
-    item.querySelector('.card-title').textContent = map.title;
-    item.querySelector('.card-subtitle').textContent = map.subtitle || '';
-    item.querySelector('.lamp').classList.toggle('on', !!installed);
-    item.querySelector('.card-state-text').textContent = installed ? 'Установлена' : 'Не установлена';
-    item.querySelector('.card').addEventListener('click', () => renderGame(map));
+    item.querySelector('.card-cover').src = game.cover || latest.cover || '';
+    item.querySelector('.card-title').textContent = game.title;
+    item.querySelector('.card-subtitle').textContent = chapters.length > 1
+      ? `${chapters.length} ${plural(chapters.length, 'глава', 'главы', 'глав')}`
+      : latest.subtitle || '';
+    item.querySelector('.lamp').classList.toggle('on', installed > 0);
+    item.querySelector('.card-state-text').textContent = chapters.length > 1
+      ? (installed ? `Установлено: ${installed} из ${chapters.length}` : 'Не установлена')
+      : (installed ? 'Установлена' : 'Не установлена');
+    item.querySelector('.card').addEventListener('click', () => renderGame(game));
     grid.append(item);
   }
 
   show(section);
 }
 
+function plural(n, one, few, many) {
+  const tens = n % 100;
+  const units = n % 10;
+  if (tens >= 11 && tens <= 14) return many;
+  if (units === 1) return one;
+  if (units >= 2 && units <= 4) return few;
+  return many;
+}
+
 // ---------- game page ----------
 
-function renderGame(map) {
+// A project page: chapter tabs on top, the chosen chapter below (the latest one at first)
+function renderGame(game) {
+  const chapters = chaptersOf(game);
+  const map = chapters.find(m => m.id === state.chapter[game.id]) || chapters[chapters.length - 1];
+  state.chapter[game.id] = map.id;
   const section = fromTemplate('tpl-game');
 
   section.querySelector('.back').addEventListener('click', renderLibrary);
+  section.querySelector('.game-name').textContent = game.title;
+  section.querySelector('.game-tagline').textContent = game.tagline || '';
+
+  const tabs = section.querySelector('.chapters');
+  for (const chapter of chapters) {
+    const tab = document.createElement('button');
+    tab.type = 'button';
+    tab.className = 'chapter-tab';
+    tab.setAttribute('role', 'tab');
+    tab.setAttribute('aria-selected', String(chapter.id === map.id));
+    const lamp = document.createElement('i');
+    lamp.className = 'lamp';
+    lamp.classList.toggle('on', !!state.statuses[chapter.id]?.installed);
+    const number = document.createElement('span');
+    number.className = 'chapter-tab-number';
+    number.textContent = chapter.chapter || chapter.title;
+    const name = document.createElement('span');
+    name.className = 'chapter-tab-name';
+    name.textContent = chapter.chapterName || chapter.subtitle || '';
+    tab.append(lamp, number, name);
+    tab.addEventListener('click', () => {
+      if (chapter.id === map.id) return;
+      state.chapter[game.id] = chapter.id;
+      renderGame(game);
+    });
+    tabs.append(tab);
+  }
+
   section.querySelector('.game-cover img').src = map.cover || '';
-  section.querySelector('.game-title').textContent = map.title;
-  section.querySelector('.game-subtitle').textContent = map.subtitle || '';
+  section.querySelector('.game-title').textContent = map.chapterName || map.title;
+  section.querySelector('.game-subtitle').textContent = map.chapter || map.subtitle || '';
 
   const facts = section.querySelector('.game-facts');
   for (const text of [map.players, `Версия ${map.version}`, ...(map.tags || [])]) {
@@ -187,6 +261,8 @@ function renderGame(map) {
 
   gameView = {
     id: map.id,
+    game: game.id,
+    tabs,
     button: section.querySelector('.btn-play'),
     label: section.querySelector('.btn-play span'),
     status: section.querySelector('.game-status'),
@@ -230,7 +306,10 @@ async function run(id, startText, action) {
     const res = await action();
     state.statuses[id] = await window.mop.getMapStatus(id);
     setStatus(id, res.message || '', res.ok ? 'ok' : res.error ? 'error' : '');
-    if (gameView && gameView.id === id) showGraphics(id);
+    if (gameView && gameView.id === id) {
+      showGraphics(id);
+      updateTabs();
+    }
   } catch (err) {
     setStatus(id, err.message, 'error');
   } finally {
@@ -278,6 +357,15 @@ async function showGraphics(id) {
 }
 
 // ---------- install / play state ----------
+
+// Lamps on the chapter tabs follow installs
+function updateTabs() {
+  if (!gameView) return;
+  const game = state.games.find(g => g.id === gameView.game);
+  chaptersOf(game).forEach((chapter, i) => {
+    gameView.tabs.children[i]?.querySelector('.lamp').classList.toggle('on', !!state.statuses[chapter.id]?.installed);
+  });
+}
 
 function updateButton() {
   if (!gameView) return;
@@ -360,6 +448,7 @@ async function loadMaps() {
   try {
     const res = await window.mop.listMaps();
     state.maps = res.maps;
+    state.games = res.games;
     state.offline = res.offline;
     for (const map of state.maps) {
       state.statuses[map.id] = await window.mop.getMapStatus(map.id);
@@ -374,6 +463,7 @@ async function loadMaps() {
 // A fresher list from the network replaced the one shown at start
 window.mop.onMaps(async res => {
   state.maps = res.maps;
+  state.games = res.games;
   state.offline = res.offline;
   for (const map of state.maps) {
     state.statuses[map.id] = await window.mop.getMapStatus(map.id);
@@ -383,8 +473,9 @@ window.mop.onMaps(async res => {
     return;
   }
   // The open game page is redrawn only when nothing runs on it, so progress is not lost
-  const open = state.maps.find(m => m.id === gameView.id);
-  if (open && !state.working.has(open.id) && !state.statuses[open.id]?.running) renderGame(open);
+  const open = mapById(gameView.id);
+  const game = gameOf(gameView.id);
+  if (open && game && !state.working.has(open.id) && !state.statuses[open.id]?.running) renderGame(game);
 });
 
 async function start() {

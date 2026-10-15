@@ -1,8 +1,8 @@
 {
-  "name": "mop-launcher",
-  "productName": "MOP Launcher",
+  "name": "mg-launcher",
+  "productName": "MG Launcher",
   "version": "0.1.5",
-  "description": "Launcher for Mystery Of Pizzaplex maps",
+  "description": "Launcher for Mini Games Studio maps",
   "main": "src/main/main.js",
   "private": true,
   "scripts": {
@@ -26,7 +26,7 @@
   },
   "build": {
     "appId": "io.github.m1haos.moplauncher",
-    "productName": "MOP Launcher",
+    "productName": "MG Launcher",
     "directories": {
       "output": "release",
       "buildResources": "build"
@@ -45,14 +45,14 @@
       "perMachine": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "MOP Launcher",
+      "shortcutName": "MG Launcher",
       "runAfterFinish": true,
       "deleteAppDataOnUninstall": false,
       "installerLanguages": [
         "ru_RU"
       ],
       "language": "1049",
-      "artifactName": "MOP-Launcher-Setup-${version}.${ext}"
+      "artifactName": "MG-Launcher-Setup-${version}.${ext}"
     },
     "extraResources": [
       {

@@ -458,8 +458,8 @@ async function start(dirs, { mapId, versionId, javaw, nick, world, server, memor
     gameProfile: { name: nick, id: uuid },
     accessToken: uuid,
     userType: 'legacy',
-    launcherName: 'MOP Launcher',
-    launcherBrand: 'MOP Launcher',
+    launcherName: 'MG Launcher',
+    launcherBrand: 'MG Launcher',
     minMemory: 1024,
     maxMemory: memoryMb,
     // Straight into the map world or the friend's game, past the main menu

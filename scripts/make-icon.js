@@ -1,5 +1,6 @@
-// Draws build/icon.svg into build/icon.png (512x512), build/icon.ico (16-256 px)
-// and src/renderer/assets/brand.png (the header logo).
+// Draws build/icon.svg (the studio icon) into build/icon.png (512x512), build/icon.ico (16-256 px)
+// and src/renderer/assets/brand.png (the header mark), and build/logo.svg (MINI GAMES STUDIO,
+// made by the logo tools of the studio) into src/renderer/assets/studio-logo.png.
 // Electron does the drawing because Windows has no SVG converter out of the box.
 // The .ico is made here too: the converter of electron-builder fails on some PCs
 // with "WebAssembly.Memory(): could not allocate memory".
@@ -12,19 +13,25 @@ const { app, BrowserWindow } = require('electron');
 
 const SIZE = 512;
 const ICO_SIZES = [16, 24, 32, 48, 64, 128, 256];
-const svg = fs.readFileSync(path.join(__dirname, '..', 'build', 'icon.svg'), 'utf8');
-const svgUrl = `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
+// The library shows the logo 230 px wide; twice that for sharp HiDPI screens
+const LOGO_WIDTH = 460 * 2;
 
-const draw = size => `new Promise((resolve, reject) => {
+const svgUrl = name => {
+  const svg = fs.readFileSync(path.join(__dirname, '..', 'build', name), 'utf8');
+  return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
+};
+
+const draw = (url, width, height = width) => `new Promise((resolve, reject) => {
   const img = new Image();
   img.onload = () => {
     const canvas = document.createElement('canvas');
-    canvas.width = canvas.height = ${size};
-    canvas.getContext('2d').drawImage(img, 0, 0, ${size}, ${size});
+    canvas.width = ${width};
+    canvas.height = ${height} || Math.round(${width} * img.naturalHeight / img.naturalWidth);
+    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
     resolve(canvas.toDataURL('image/png'));
   };
   img.onerror = () => reject(new Error('SVG did not load'));
-  img.src = ${JSON.stringify(svgUrl)};
+  img.src = ${JSON.stringify(url)};
 })`;
 
 // An .ico file is a small header, one 16-byte entry per size, then the images (PNG works since Vista)
@@ -54,10 +61,9 @@ function ico(images) {
 app.whenReady().then(async () => {
   const win = new BrowserWindow({ show: false });
   await win.loadURL('about:blank');
-  const render = async size => {
-    const url = await win.webContents.executeJavaScript(draw(size));
-    return Buffer.from(url.split(',')[1], 'base64');
-  };
+  const icon = svgUrl('icon.svg');
+  const toPng = async script => Buffer.from((await win.webContents.executeJavaScript(script)).split(',')[1], 'base64');
+  const render = size => toPng(draw(icon, size));
 
   const dir = path.join(__dirname, '..', 'build');
   fs.writeFileSync(path.join(dir, 'icon.png'), await render(SIZE));
@@ -66,7 +72,8 @@ app.whenReady().then(async () => {
   fs.writeFileSync(path.join(dir, 'icon.ico'), ico(images));
   // The logo in the launcher header: 32 px on screen, twice that for sharp HiDPI screens
   fs.writeFileSync(path.join(__dirname, '..', 'src', 'renderer', 'assets', 'brand.png'), await render(64));
-  console.log(`Saved icon.png and icon.ico in ${dir}`);
+  fs.writeFileSync(path.join(__dirname, '..', 'src', 'renderer', 'assets', 'studio-logo.png'), await toPng(draw(svgUrl('logo.svg'), LOGO_WIDTH, 0)));
+  console.log(`Saved icon.png and icon.ico in ${dir}, brand.png and studio-logo.png in src/renderer/assets`);
   app.quit();
 }).catch(err => {
   console.error(err);

@@ -18,14 +18,30 @@ function cacheFile() {
   return path.join(app.getPath('userData'), 'manifest-cache.json');
 }
 
+// Games group maps as chapters ("games" in the manifest, since launcher 0.2). Launchers 0.1.x
+// read only "maps"; for a manifest without "games" every map is a game of one chapter.
+function groupGames(manifest, maps) {
+  const ids = new Set(maps.map(m => m.id));
+  const games = (manifest.games || [])
+    .map(game => ({ ...game, chapters: (game.chapters || []).filter(id => ids.has(id)) }))
+    .filter(game => game.chapters.length);
+  const grouped = new Set(games.flatMap(g => g.chapters));
+  for (const map of maps) {
+    if (!grouped.has(map.id)) games.push({ id: map.id, title: map.title, chapters: [map.id] });
+  }
+  return games;
+}
+
 function resolveLinks(manifest, base) {
   const abs = link => (link ? new URL(link, base).href : null);
-  return manifest.maps.map(map => ({
+  const maps = manifest.maps.map(map => ({
     ...map,
     cover: abs(map.cover),
     pack: map.pack ? { ...map.pack, url: abs(map.pack.url) } : null,
     world: map.world ? { ...map.world, url: abs(map.world.url) } : null,
   }));
+  const games = groupGames(manifest, maps).map(game => ({ ...game, cover: abs(game.cover) }));
+  return { maps, games };
 }
 
 const isLink = source => /^https?:\/\//.test(source);
@@ -35,6 +51,7 @@ function check(manifest) {
   for (const map of manifest.maps) {
     if (!map.id || !map.title) throw new Error('У карты в манифесте нет id или title');
   }
+  if (manifest.games !== undefined && !Array.isArray(manifest.games)) throw new Error('В манифесте games не список');
   return manifest;
 }
 
@@ -68,13 +85,13 @@ function bundled(rel) {
 // The list that is on disk right now, without the network; null if there is none
 function loadLocal() {
   const { manifest: source, bundled: bundledRel } = config();
-  if (!isLink(source)) return { maps: readLocal(source, app.getAppPath()), offline: false };
+  if (!isLink(source)) return { ...readLocal(source, app.getAppPath()), offline: false };
   try {
     const manifest = check(JSON.parse(fs.readFileSync(cacheFile(), 'utf8')));
-    return { maps: resolveLinks(manifest, source), offline: false };
+    return { ...resolveLinks(manifest, source), offline: false };
   } catch {
-    const maps = bundled(bundledRel);
-    return maps ? { maps, offline: false } : null;
+    const list = bundled(bundledRel);
+    return list ? { ...list, offline: false } : null;
   }
 }
 
@@ -85,29 +102,29 @@ async function loadRemote() {
   const manifest = await download(source);
   fs.mkdirSync(path.dirname(cacheFile()), { recursive: true });
   fs.writeFileSync(cacheFile(), JSON.stringify(manifest), 'utf8');
-  return { maps: resolveLinks(manifest, source), offline: false };
+  return { ...resolveLinks(manifest, source), offline: false };
 }
 
 async function load() {
   const { manifest: source, bundled: bundledRel } = config();
 
   if (!isLink(source)) {
-    return { maps: readLocal(source, app.getAppPath()), offline: false };
+    return { ...readLocal(source, app.getAppPath()), offline: false };
   }
 
   try {
     const manifest = await download(source);
     fs.mkdirSync(path.dirname(cacheFile()), { recursive: true });
     fs.writeFileSync(cacheFile(), JSON.stringify(manifest), 'utf8');
-    return { maps: resolveLinks(manifest, source), offline: false };
+    return { ...resolveLinks(manifest, source), offline: false };
   } catch (err) {
     // No internet: show what we saw last time
     if (fs.existsSync(cacheFile())) {
       const manifest = JSON.parse(fs.readFileSync(cacheFile(), 'utf8'));
-      return { maps: resolveLinks(manifest, source), offline: true };
+      return { ...resolveLinks(manifest, source), offline: true };
     }
-    const maps = bundled(bundledRel);
-    if (maps) return { maps, offline: false };
+    const list = bundled(bundledRel);
+    if (list) return { ...list, offline: false };
     throw new Error(`Не удалось загрузить список игр: ${err.message}`);
   }
 }

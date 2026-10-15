@@ -1,0 +1,10 @@
+{
+  "games": [
+    {
+      "id": "mop",
+      "title": "Mystery Of Pizzaplex",
+      "tagline": "Хоррор-карты с головоломками по мотивам FNaF",
+      "chapters": ["mop1", "mop2"]
+    }
+  ]
+}

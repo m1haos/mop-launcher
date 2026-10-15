@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('mop', {
   getSettings: () => ipcRenderer.invoke('settings:get'),
   setNick: nick => ipcRenderer.invoke('settings:setNick', nick),
   setMusic: on => ipcRenderer.invoke('settings:setMusic', on),
+  setMusicVolume: volume => ipcRenderer.invoke('settings:setMusicVolume', volume),
   setGraphics: level => ipcRenderer.invoke('settings:setGraphics', level),
   getGraphics: id => ipcRenderer.invoke('map:graphics', id),
   getMusic: () => ipcRenderer.invoke('music:get'),

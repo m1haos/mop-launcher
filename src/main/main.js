@@ -14,6 +14,9 @@ const world = require('./world');
 const graphics = require('./graphics');
 const covers = require('./covers');
 
+// Before anything reads userData: it also moves the folder of the old MOP Launcher
+app.setPath('userData', paths.defaultUserData());
+
 let win = null;
 let maps = [];
 const busy = new Set();      // maps being installed or started right now
@@ -98,7 +101,7 @@ function createWindow() {
     minWidth: 960,
     minHeight: 600,
     backgroundColor: '#16161a',
-    title: 'MOP Launcher',
+    title: 'MG Launcher',
     // The installed launcher takes its icon from the .exe
     ...(app.isPackaged ? {} : { icon: path.join(__dirname, '..', '..', 'build', 'icon.png') }),
     webPreferences: {
@@ -113,6 +116,7 @@ function createWindow() {
 ipcMain.handle('settings:get', () => settings.load());
 ipcMain.handle('settings:setNick', (_e, nick) => settings.setNick(nick));
 ipcMain.handle('settings:setMusic', (_e, on) => settings.setMusic(on));
+ipcMain.handle('settings:setMusicVolume', (_e, volume) => settings.setMusicVolume(volume));
 
 // The page cannot fetch its own file:// assets, so the track goes over IPC.
 // Replace src/renderer/assets/music.ogg to change it; without the file the launcher is silent.
@@ -127,15 +131,17 @@ ipcMain.handle('music:get', () => {
 // What the interface gets: the list with covers from the local cache where possible
 function withCovers(res) {
   const cacheDir = path.join(app.getPath('userData'), 'covers');
-  const shown = res.maps.map(map => ({ ...map, cover: covers.localCover(map, cacheDir, manifest.bundledDir()) }));
-  return { ...res, maps: shown };
+  const local = item => ({ ...item, cover: covers.localCover(item, cacheDir, manifest.bundledDir()) });
+  return { ...res, maps: res.maps.map(local), games: res.games.map(local) };
 }
 
+let games = [];
 let shownList = '';
 
 function useList(res) {
   maps = res.maps;
-  shownList = JSON.stringify(res.maps);
+  games = res.games;
+  shownList = JSON.stringify([res.maps, res.games]);
   return withCovers(res);
 }
 
@@ -143,9 +149,9 @@ function useList(res) {
 async function refreshMaps() {
   try {
     const res = await manifest.loadRemote();
-    if (JSON.stringify(res.maps) !== shownList) send('maps', useList(res));
+    if (JSON.stringify([res.maps, res.games]) !== shownList) send('maps', useList(res));
   } catch {
-    send('maps', { ...withCovers({ maps }), offline: true });
+    send('maps', { ...withCovers({ maps, games }), offline: true });
   }
 }
 

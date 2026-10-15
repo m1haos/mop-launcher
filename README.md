@@ -1,7 +1,7 @@
-# Лаунчер
+# MG Launcher
 
-Electron + библиотеки @xmcl (установка NeoForge, загрузка файлов Mojang, запуск).
-Пиратский: офлайн-ники, без входа в аккаунт.
+Лаунчер карт MINI Games Studio. Electron + библиотеки @xmcl (установка NeoForge, загрузка файлов Mojang, запуск).
+Пиратский: офлайн-ники, без входа в аккаунт. До версии 0.2 назывался MOP Launcher.
 
 Репозиторий лежит в папке `launcher/` проекта карты. Сам проект карты
 (`pack/`, мир, документы) в Git не хранится: скрипты сборки ищут его
@@ -19,13 +19,13 @@ npm.cmd start        # открыть лаунчер
 
 В PowerShell пишите `npm.cmd`, а не `npm`: обычный `npm` там блокируется политикой скриптов.
 
-Настройки игрока (ник) лежат в `%APPDATA%\MOP Launcher\settings.json`.
+Настройки игрока (ник, музыка, графика) лежат в `%APPDATA%\MG Launcher\settings.json`.
 Удалите файл, чтобы снова увидеть первый запуск.
 
 ## Где лежит игра
 
 ```
-%APPDATA%\MOP Launcher\
+%APPDATA%\MG Launcher\
   settings.json          ник
   state.json             что уже установлено
   java\                  Java от Mojang (та же, что у официального лаунчера)
@@ -34,7 +34,7 @@ npm.cmd start        # открыть лаунчер
 ```
 
 Если в пути к `%APPDATA%` есть русские буквы (имя пользователя Windows кириллицей),
-игра ставится в `C:\Users\Public\MOP Launcher`: Minecraft плохо переносит такие пути.
+игра ставится в `C:\Users\Public\MG Launcher`: Minecraft плохо переносит такие пути.
 Ник остаётся в `%APPDATA%`.
 
 Проверка установки и запуска из консоли, без окна (то же, что делает кнопка, но с подробным выводом):
@@ -44,18 +44,22 @@ npm.cmd run try:install
 npm.cmd run try:launch -- Freddy_42
 ```
 
-Чтобы установить всё заново, удалите `state.json` (или всю папку `MOP Launcher`).
+Чтобы установить всё заново, удалите `state.json` (или всю папку `MG Launcher`).
+
+Папку `MOP Launcher` от версий 0.1.x лаунчер при первом запуске переименовывает в `MG Launcher`.
+Если Windows её держит (игра ещё запущена), лаунчер работает со старой папкой.
 
 ## Установщик
 
 ```powershell
 cd launcher
-npm.cmd run dist     # release/MOP-Launcher-Setup-<версия>.exe
+npm.cmd run dist     # release/MG-Launcher-Setup-<версия>.exe
 ```
 
 - Установщик в один клик, без прав администратора: ставит лаунчер в `%LOCALAPPDATA%\Programs`,
   делает ярлыки на рабочем столе и в «Пуске» и сразу открывает лаунчер. Удаление через
-  «Приложения» Windows; игра и ник в `%APPDATA%\MOP Launcher` при этом остаются.
+  «Приложения» Windows; игра и ник в `%APPDATA%\MG Launcher` при этом остаются.
+- `appId` остался от MOP Launcher, поэтому новый установщик ставится поверх старого, а не рядом.
 - Внутрь кладётся `dist-pack/` (манифест, `.mrpack`, обложка, мир): сразу после установки
   карта уже в списке, даже без релиза в GitHub. Поэтому перед `dist` выполните `pack:build`,
   без `dist-pack/manifest.json` сборка остановится.
@@ -65,11 +69,13 @@ npm.cmd run dist     # release/MOP-Launcher-Setup-<версия>.exe
 
 ## Иконка и музыка
 
-- Иконка: пиксель-арт 32×32 в `build/make-icon-svg.js` (`node build/make-icon-svg.js` → `build/icon.svg`). Затем выполните `npm.cmd run icon`: получатся `build/icon.png`
-  и `build/icon.ico` (её берёт сборка .exe; свой конвертер electron-builder на некоторых ПК падает
-  с «WebAssembly.Memory(): could not allocate memory»).
+- Иконка и логотип студии: `build/icon.svg` и `build/logo.svg` (MINI GAMES STUDIO) из папки логотипов студии
+  (`MINI Studio/logo`, вариант «без полоски»; надпись GAMES STUDIO делает `logo/tools/make-games-logo.js`).
+  Затем выполните `npm.cmd run icon`: получатся `build/icon.png`, `build/icon.ico` (её берёт сборка .exe;
+  свой конвертер electron-builder на некоторых ПК падает с «WebAssembly.Memory(): could not allocate memory»),
+  `brand.png` для шапки и `studio-logo.png` для главного экрана.
 - Музыка: `src/renderer/assets/music.ogg` играет по кругу без паузы на стыке и затихает, пока идёт игра.
-  Кнопка в шапке выключает её, выбор запоминается. Трек — тёмная колыбельная на 80 секунд
+  Кнопка в шапке выключает её, ползунок рядом меняет громкость; всё запоминается. Трек — тёмная колыбельная на 80 секунд
   (пэд Am–F–Dm–E, расстроенная музыкальная шкатулка, далёкие удары по трубам), синтезирована
   скриптом `media/launcher-music/make-music.js` проекта карты. Поправить: изменить скрипт,
   `node make-music.js`, `ffmpeg -i music.wav -c:a libvorbis -q:a 5 music.ogg`, скопировать сюда.
@@ -98,7 +104,7 @@ npm.cmd run pack:build   # собрать launcher/dist-pack/
 и `manifest.json`. Всё это загружается в один релиз GitHub.
 
 - Название, описание, версия карты и версия NeoForge хранятся в `pack/pack.json`.
-- Лаунчер хранит обложки по sha1 (`coverSha1` в манифесте) в `%APPDATA%\MOP Launcher\covers` и не качает их повторно.
+- Лаунчер хранит обложки по sha1 (`coverSha1` в манифесте) в `%APPDATA%\MG Launcher\covers` и не качает их повторно.
 - Обложка рисуется из `pack/cover.svg`: после правки выполните `npm.cmd run cover`, получится `pack/cover.png`
   (1280×720, с плёночным зерном). Сборка берёт PNG.
 - `pack:lock` не трогает уже закреплённые версии. Обновить всё до свежих версий
@@ -143,6 +149,16 @@ npm.cmd run pack:build   # собрать launcher/dist-pack/
   («недействительная сессия»). Перед каждым запуском мира лаунчер пишет в
   `saves/<мир>/mcwifipnp.json` `"online-mode": false`, и экран мода mcwifipnp уже стоит на Online Mode → Disable.
   Если хост играет не в мире карты (мира в манифесте ещё нет), Disable надо выбрать руками.
+
+## Проекты и главы
+
+Главный экран показывает проекты студии, внутри проекта главы вкладками (сначала открыта последняя).
+Проекты описаны в `games.json`: название, строка под ним, необязательная обложка и id карт-глав по порядку.
+Сборка кладёт их в манифест полем `games`. Карта без проекта показывается отдельным проектом из одной главы.
+Поля `chapter` («Глава 2») и `chapterName` («The Dark Corners») в `pack.json` подписывают вкладку.
+
+Каждая глава собирается своим скриптом; `scripts/manifest-out.js` заменяет в `dist-pack/manifest.json`
+только запись своей карты, записи других глав остаются. Лаунчеры 0.1.x читают только `maps`.
 
 ## Манифест
 

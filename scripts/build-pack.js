@@ -15,6 +15,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const AdmZip = require('adm-zip');
+const { writeManifest } = require('./manifest-out');
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const PACK_DIR = path.join(ROOT, 'pack');
@@ -256,26 +257,24 @@ function main() {
 
   // Links are relative: the launcher resolves them against the manifest URL,
   // so all files just have to sit in the same release as manifest.json
-  const manifest = {
-    formatVersion: 1,
-    maps: [{
-      id: pack.id,
-      title: pack.title,
-      subtitle: pack.subtitle,
-      description: pack.description,
-      players: pack.players,
-      tags: pack.tags,
-      version: pack.version,
-      minecraft: pack.minecraft,
-      neoforge: pack.neoforge,
-      cover,
-      // The launcher keeps covers by this hash and does not download them again
-      coverSha1,
-      pack: { url: packName, sha1: sha1(packBuffer), size: packBuffer.length },
-      world,
-    }],
-  };
-  fs.writeFileSync(path.join(OUT_DIR, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n', 'utf8');
+  writeManifest(OUT_DIR, {
+    id: pack.id,
+    title: pack.title,
+    subtitle: pack.subtitle,
+    chapter: pack.chapter,
+    chapterName: pack.chapterName,
+    description: pack.description,
+    players: pack.players,
+    tags: pack.tags,
+    version: pack.version,
+    minecraft: pack.minecraft,
+    neoforge: pack.neoforge,
+    cover,
+    // The launcher keeps covers by this hash and does not download them again
+    coverSha1,
+    pack: { url: packName, sha1: sha1(packBuffer), size: packBuffer.length },
+    world,
+  });
 
   console.log(`${packName}: ${files.length} downloads, ${count} own files, ${(packBuffer.length / 1024).toFixed(1)} KB`);
   console.log(`Output: ${OUT_DIR}`);

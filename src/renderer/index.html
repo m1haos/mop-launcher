@@ -4,23 +4,26 @@
   <meta charset="utf-8">
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'self'; img-src 'self' file: https: data:; media-src 'self' file:; style-src 'self'; script-src 'self'">
-  <title>MOP Launcher</title>
+  <title>MG Launcher</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <header class="bar">
     <div class="brand">
       <img class="brand-mark" src="assets/brand.png" alt="">
-      <span>MOP Launcher</span>
+      <span>MG Launcher</span>
     </div>
     <div class="bar-right">
-      <button id="music-toggle" class="music-toggle" type="button" aria-pressed="true" title="Музыка" hidden>
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path class="speaker" d="M4 9h4l5-4v14l-5-4H4Z" />
-          <path class="waves" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12" />
-          <path class="cross" d="m16.5 9.5 5 5m0-5-5 5" />
-        </svg>
-      </button>
+      <div id="music" class="music" hidden>
+        <button id="music-toggle" class="music-toggle" type="button" aria-pressed="true" title="Музыка">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path class="speaker" d="M4 9h4l5-4v14l-5-4H4Z" />
+            <path class="waves" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12" />
+            <path class="cross" d="m16.5 9.5 5 5m0-5-5 5" />
+          </svg>
+        </button>
+        <input id="music-volume" class="music-volume" type="range" min="0" max="100" step="1" aria-label="Громкость музыки">
+      </div>
       <button id="nick-chip" class="nick-chip" type="button" hidden>
         <span class="nick-chip-label">Ник</span>
         <span id="nick-value" class="nick-chip-value"></span>
@@ -49,7 +52,11 @@
 
   <template id="tpl-library">
     <section class="library">
-      <h1 class="library-title">Игры</h1>
+      <div class="studio">
+        <img class="studio-logo" src="assets/studio-logo.png" alt="MINI Games Studio">
+        <p class="studio-text">Сюжетные карты для Minecraft: хоррор, головоломки, игра с друзьями.</p>
+      </div>
+      <h1 class="library-title">Наши проекты</h1>
       <ul class="library-grid"></ul>
     </section>
   </template>
@@ -71,12 +78,17 @@
     <section class="game">
       <button class="back" type="button">
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3 5 8l5 5" /></svg>
-        Все игры
+        Все проекты
       </button>
+      <div class="game-head">
+        <h1 class="game-name"></h1>
+        <p class="game-tagline"></p>
+      </div>
+      <div class="chapters" role="tablist" aria-label="Главы"></div>
       <div class="game-body">
         <div class="game-cover"><img alt=""></div>
         <div class="game-info">
-          <h1 class="game-title"></h1>
+          <h2 class="game-title"></h2>
           <p class="game-subtitle"></p>
           <ul class="game-facts"></ul>
           <div class="game-desc"></div>
