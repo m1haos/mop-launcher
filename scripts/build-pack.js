@@ -8,7 +8,7 @@
 // The same .mrpack imports into Prism Launcher (Add Instance -> Import).
 // Upload everything from dist-pack/ to one GitHub release.
 //
-// Usage (in the launcher folder):  npm run pack:build
+// Usage (in the launcher folder):  npm run pack:build  [-- "<another chapter folder>"]
 // Before that:                     npm run pack:lock
 
 const fs = require('fs');
@@ -17,9 +17,10 @@ const crypto = require('crypto');
 const AdmZip = require('adm-zip');
 const { writeManifest } = require('./manifest-out');
 
-const ROOT = path.resolve(__dirname, '..', '..');
+const ROOT = require('./lib/map-root');
 const PACK_DIR = path.join(ROOT, 'pack');
-const OUT_DIR = path.join(ROOT, 'launcher', 'dist-pack');
+// One dist-pack for all chapters: the manifest lists them together
+const OUT_DIR = path.join(__dirname, '..', 'dist-pack');
 
 // Never shipped: notes, leftovers and files the game writes into linked folders
 const SKIP_FILES = /^(readme\..*|.*\.zip|thumbs\.db|desktop\.ini|\.ds_store)$/i;
@@ -120,7 +121,9 @@ function buildIndex(pack, files) {
       downloads: [m.url],
       fileSize: m.size,
     })),
-    dependencies: { minecraft: pack.minecraft, neoforge: pack.neoforge },
+    dependencies: pack.forge
+      ? { minecraft: pack.minecraft, forge: pack.forge }
+      : { minecraft: pack.minecraft, neoforge: pack.neoforge },
   };
 }
 
@@ -161,6 +164,7 @@ function compileGraphics(pack, lock) {
       hint: level.hint,
       options: level.options || {},
       sodium: level.sodium || null,
+      optifine: level.optifine || null,
       shader: look ? shaderText({ ...look, ...level.shader }) : null,
     };
   }
@@ -168,6 +172,8 @@ function compileGraphics(pack, lock) {
   return {
     default: src.default,
     shaderFile: pack.shader ? lockEntry(lock, pack.shader.slug).file : null,
+    // iris (NeoForge chapters) or optifine (chapter 1 on Forge 1.16.5)
+    shaderLoader: pack.shader?.loader || 'iris',
     common: { ...src.common, resourcePacks: JSON.stringify(resourcePacks(pack, lock)) },
     levels,
   };
@@ -199,9 +205,18 @@ function main() {
   count += addFolder(zip, path.join(PACK_DIR, 'config'), 'overrides/config');
   count += addFolder(zip, path.join(PACK_DIR, 'kubejs'), 'overrides/kubejs');
   count += addOwnMods(zip);
+  // Mods that are not on Modrinth travel inside the pack as they are
+  count += addFolder(zip, path.join(PACK_DIR, 'mods'), 'overrides/mods');
+  // Other folders of the game as they are (pack/overrides/customnpcs -> customnpcs)
+  count += addFolder(zip, path.join(PACK_DIR, 'overrides'), 'overrides');
   for (const name of pack.resourcepacks) {
     const local = path.join(PACK_DIR, 'resourcepacks', name);
-    if (fs.existsSync(local)) count += addFolder(zip, local, `overrides/resourcepacks/${name}`);
+    if (!fs.existsSync(local)) continue;
+    if (fs.statSync(local).isDirectory()) count += addFolder(zip, local, `overrides/resourcepacks/${name}`);
+    else {
+      zip.addFile(`overrides/resourcepacks/${name}`, fs.readFileSync(local));
+      count++;
+    }
   }
 
   const graphics = compileGraphics(pack, lock);
@@ -212,11 +227,13 @@ function main() {
 
   if (pack.shader) {
     const shader = lockEntry(lock, pack.shader.slug);
-    // Iris reads shader settings from "<shader file name>.txt" next to the shader
+    // Iris and OptiFine read shader settings from "<shader file name>.txt" next to the shader
     const profile = graphics?.levels[graphics.default].shader
       ?? fs.readFileSync(path.join(PACK_DIR, pack.shader.profile), 'utf8');
     zip.addFile(`overrides/shaderpacks/${shader.file}.txt`, Buffer.from(profile, 'utf8'));
-    if (!fs.existsSync(path.join(PACK_DIR, 'config', 'iris.properties'))) {
+    if (pack.shader.loader === 'optifine') {
+      zip.addFile('overrides/optionsshaders.txt', Buffer.from(`shaderPack=${shader.file}\n`, 'utf8'));
+    } else if (!fs.existsSync(path.join(PACK_DIR, 'config', 'iris.properties'))) {
       zip.addFile('overrides/config/iris.properties', Buffer.from(`enableShaders=true\nshaderPack=${shader.file}\n`, 'utf8'));
     }
     count++;
@@ -229,6 +246,11 @@ function main() {
   }
   zip.addFile('overrides/options.txt', Buffer.from(defaultOptions(pack, lock, graphics), 'utf8'));
   count++;
+  const optifine = graphics?.levels[graphics.default].optifine;
+  if (optifine) {
+    zip.addFile('overrides/optionsof.txt', Buffer.from(Object.entries(optifine).map(([k, v]) => `${k}:${v}`).join('\n') + '\n', 'utf8'));
+    count++;
+  }
 
   fs.mkdirSync(OUT_DIR, { recursive: true });
   const packName = `${pack.id}-${pack.version}.mrpack`;
@@ -256,7 +278,11 @@ function main() {
   }
 
   // Links are relative: the launcher resolves them against the manifest URL,
-  // so all files just have to sit in the same release as manifest.json
+  // so all files just have to sit in the same release as manifest.json.
+  // A chapter with its own release ("releaseUrl" in pack.json: big files that rarely change)
+  // links there with full URLs, so later releases do not carry its files again.
+  const link = name => (name && pack.releaseUrl ? `${pack.releaseUrl.replace(/\/$/, '')}/${name}` : name);
+  if (world) world.url = link(world.url);
   writeManifest(OUT_DIR, {
     id: pack.id,
     title: pack.title,
@@ -269,10 +295,11 @@ function main() {
     version: pack.version,
     minecraft: pack.minecraft,
     neoforge: pack.neoforge,
-    cover,
+    forge: pack.forge,
+    cover: link(cover),
     // The launcher keeps covers by this hash and does not download them again
     coverSha1,
-    pack: { url: packName, sha1: sha1(packBuffer), size: packBuffer.length },
+    pack: { url: link(packName), sha1: sha1(packBuffer), size: packBuffer.length },
     world,
   });
 

@@ -1,7 +1,8 @@
 // Starts the game from the console and prints its output.
 // Run try:install first (or press "Установить" in the launcher).
 //
-// Usage (in the launcher folder):  npm.cmd run try:launch -- <nick>
+// Usage (in the launcher folder):  npm.cmd run try:launch -- <nick> ["<another chapter folder>"]
+// MOP_MEMORY=2560 gives the game less memory (a busy PC).
 
 const fs = require('fs');
 const path = require('path');
@@ -9,7 +10,8 @@ const paths = require('../src/main/paths');
 const game = require('../src/main/game');
 
 const nick = process.argv[2] || 'Tester';
-const pack = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'pack', 'pack.json'), 'utf8'));
+const ROOT = process.argv[3] ? path.resolve(process.argv[3]) : path.join(__dirname, '..', '..');
+const pack = JSON.parse(fs.readFileSync(path.join(ROOT, 'pack', 'pack.json'), 'utf8'));
 const dirs = paths.layout(paths.gameRoot());
 
 let lastText = '';
@@ -23,7 +25,8 @@ function report({ text }) {
   const { versionId, java } = await game.prepare(dirs, pack, report);
   console.log(`Starting ${versionId} as ${nick} (uuid ${game.offlineUuid(nick)})`);
   console.log(`Game folder: ${path.join(dirs.instances, pack.id)}`);
-  const proc = await game.start(dirs, { mapId: pack.id, versionId, javaw: java.java, nick });
+  const memoryMb = Number(process.env.MOP_MEMORY) || undefined;
+  const proc = await game.start(dirs, { mapId: pack.id, versionId, javaw: java.java, nick, memoryMb });
   proc.stdout.pipe(process.stdout);
   proc.stderr.pipe(process.stderr);
   game.onHostAddress(proc, address => console.log(`

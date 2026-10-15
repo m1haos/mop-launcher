@@ -6,13 +6,13 @@
 //   - every entry gets sha512, size and folder (needed for the .mrpack).
 // To move everything to newer versions use tools/sync-mods.ps1 -Update.
 //
-// Usage (in the launcher folder):  npm run pack:lock
+// Usage (in the launcher folder):  npm run pack:lock  [-- "<another chapter folder>"]
 
 const fs = require('fs');
 const path = require('path');
 const modrinth = require('./lib/modrinth');
 
-const ROOT = path.resolve(__dirname, '..', '..');
+const ROOT = require('./lib/map-root');
 const LIST_PATH = path.join(ROOT, 'pack', 'modlist.json');
 const LOCK_PATH = path.join(ROOT, 'pack', 'modlist.lock.json');
 

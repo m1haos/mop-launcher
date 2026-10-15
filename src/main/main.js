@@ -32,7 +32,8 @@ function send(channel, data) {
 
 function isInstalled(map) {
   const installed = stateFile.load(dirs().state).maps[map.id];
-  return !!installed && installed.version === map.version && installed.neoforge === map.neoforge
+  return !!installed && installed.version === map.version
+    && (installed.neoforge || null) === (map.neoforge || null) && (installed.forge || null) === (map.forge || null)
     && installed.pack === (map.pack?.sha1 || null)
     && installed.world === (map.world?.sha1 || null);
 }
@@ -55,7 +56,8 @@ async function install(map) {
   state.maps[map.id] = {
     version: map.version,
     minecraft: map.minecraft,
-    neoforge: map.neoforge,
+    neoforge: map.neoforge || null,
+    forge: map.forge || null,
     pack: map.pack?.sha1 || null,
     world: map.world?.sha1 || null,
     files,

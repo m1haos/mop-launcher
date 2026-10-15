@@ -18,7 +18,11 @@ const PARALLEL = 4;
 const FILE_ATTEMPTS = 3;
 
 // Settings the player changes in the game; an update must not reset them
-const KEEP_IF_EXISTS = new Set(['options.txt', 'config/iris.properties', 'config/fancymenu/options.txt']);
+const KEEP_IF_EXISTS = new Set([
+  'options.txt', 'config/iris.properties', 'config/fancymenu/options.txt',
+  // OptiFine (chapter 1)
+  'optionsof.txt', 'optionsshaders.txt',
+]);
 // Shader settings too: src/main/graphics.js writes them for the level chosen in the launcher
 const keepIfExists = rel => KEEP_IF_EXISTS.has(rel) || /^shaderpacks\/[^/]+\.txt$/.test(rel);
 

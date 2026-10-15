@@ -1,4 +1,4 @@
-// Installs and starts the game: Minecraft, Java, NeoForge.
+// Installs and starts the game: Minecraft, Java, NeoForge or Forge.
 // Does not depend on Electron, so scripts/try-*.js can run it from the console.
 //
 // Library docs: https://github.com/Voxelum/minecraft-launcher-core-node
@@ -7,15 +7,22 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { spawn } = require('child_process');
-const { Version, launch } = require('@xmcl/core');
+const AdmZip = require('adm-zip');
+const { Version, launch, LaunchPrecheck } = require('@xmcl/core');
 const {
   getVersionList,
   installTask,
   installDependenciesTask,
   installNeoForgedTask,
+  installByProfileTask,
   installJavaRuntimeTask,
 } = require('@xmcl/installer');
 const stateFile = require('./state');
+
+// The task helper of the same @xmcl copy the installer uses, so its subtasks report progress as usual
+const { task: xmclTask } = require(require.resolve('@xmcl/task', {
+  paths: [path.dirname(require.resolve('@xmcl/installer'))],
+}));
 
 // The HTTP client of @xmcl waits up to 5 minutes for a silent server and then retries,
 // so one dead host can hang the install for half an hour. This client gives up quickly
@@ -63,7 +70,7 @@ const JAVA_FILE_HOSTS = ['piston-data.mojang.com', 'bmclapi2.bangbang93.com'];
 
 const ATTEMPTS = 5;
 const STALL_MINUTES = 3;
-// NeoForge setup runs Java tools after the downloads; on a slow PC one of them can take minutes
+// Loader setup runs Java tools after the downloads; on a slow PC one of them can take minutes
 const NEOFORGE_STALL_MINUTES = 10;
 
 // Last sign of life of the running step: a downloaded chunk or a line from a NeoForge tool
@@ -258,28 +265,99 @@ function isZip(file) {
   }
 }
 
-// The NeoForge installer jar, downloaded by the launcher itself: the @xmcl download
-// of this one file hung on some connections. When the jar is already in place and
-// looks whole, @xmcl finds it and does not touch the network.
-async function ensureNeoForgeInstaller(dirs, neoforge, report) {
-  const rel = `net/neoforged/neoforge/${neoforge}/neoforge-${neoforge}-installer.jar`;
+// The two loaders a map can ask for. Older chapters run on Forge (Minecraft 1.16.5).
+// installer: path of the installer jar in the maven and in libraries/
+const LOADERS = {
+  neoforge: {
+    title: 'NeoForge',
+    id: version => `neoforge-${version}`,
+    installer: version => `net/neoforged/neoforge/${version}/neoforge-${version}-installer.jar`,
+    urls: (rel, version) => [
+      `https://maven.neoforged.net/releases/${rel}`,
+      `${MIRROR}/maven/${rel}`,
+      `${MIRROR}/neoforge/version/${version}/download/installer.jar`,
+    ],
+    task: (version, minecraft, root, options) => installNeoForgedTask('neoforge', version, root, options),
+  },
+  forge: {
+    title: 'Forge',
+    id: (version, minecraft) => `${minecraft}-forge-${version}`,
+    installer: (version, minecraft) => `net/minecraftforge/forge/${minecraft}-${version}/forge-${minecraft}-${version}-installer.jar`,
+    urls: rel => [
+      `https://maven.minecraftforge.net/${rel}`,
+      `${MIRROR}/maven/${rel}`,
+    ],
+    task: (version, minecraft, root, options, installerJar) => forgeTask(installerJar, root,
+      { ...options, mavenHost: ['https://maven.minecraftforge.net', `${MIRROR}/maven`] }),
+  },
+};
+
+// Forge from its installer jar. @xmcl's own unpacking (installForgeTask) stalls on the Forge 1.16.5
+// installer: its unzip stops partway through the universal jar and waits forever. So the jar is
+// unpacked here with adm-zip, the same way @xmcl does it, and @xmcl runs the install profile.
+function forgeTask(installerJar, root, options) {
+  return xmclTask('installForge', async function () {
+    const zip = new AdmZip(installerJar);
+    const json = name => JSON.parse(zip.readAsText(name));
+    const profile = json('install_profile.json');
+    const versionJson = json('version.json');
+    const libraries = path.join(root, 'libraries');
+    // Everything under maven/ is a library: the forge jar and the universal jar
+    for (const entry of zip.getEntries()) {
+      if (entry.isDirectory || !entry.entryName.startsWith('maven/')) continue;
+      const target = path.join(libraries, ...entry.entryName.slice('maven/'.length).split('/'));
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, entry.getData());
+    }
+    // The installer itself and the binary patches become libraries the profile points at
+    const forge = profile.path;
+    const [group, artifact, ver] = forge.split(':');
+    const dir = path.join(libraries, ...group.split('.'), artifact, ver);
+    profile.data = profile.data || {};
+    profile.data.INSTALLER = { client: `[${forge}:installer]`, server: `[${forge}:installer]` };
+    for (const side of ['client', 'server']) {
+      const entry = zip.getEntry(`data/${side}.lzma`);
+      if (!entry) continue;
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, `${artifact}-${ver}-${side}data.lzma`), entry.getData());
+      profile.data.BINPATCH = profile.data.BINPATCH || {};
+      profile.data.BINPATCH[side] = `[${forge}:${side}data@lzma]`;
+    }
+    const versionDir = path.join(root, 'versions', versionJson.id);
+    fs.mkdirSync(versionDir, { recursive: true });
+    fs.writeFileSync(path.join(versionDir, `${versionJson.id}.json`), JSON.stringify(versionJson));
+    fs.writeFileSync(path.join(versionDir, 'install_profile.json'), JSON.stringify(profile));
+    await this.concat(installByProfileTask(profile, root, options));
+    return versionJson.id;
+  });
+}
+
+// Which loader a map entry of the manifest asks for: { kind, version }, or null for plain Minecraft
+function loaderOf(map) {
+  if (map.neoforge) return { kind: 'neoforge', version: map.neoforge };
+  if (map.forge) return { kind: 'forge', version: map.forge };
+  return null;
+}
+
+// The installer jar, downloaded by the launcher itself: the @xmcl download of this one
+// file hung on some connections. When the jar is already in place and looks whole,
+// @xmcl finds it and does not touch the network.
+async function ensureLoaderInstaller(dirs, loader, version, minecraft, report) {
+  const rel = loader.installer(version, minecraft);
   const target = path.join(dirs.game, 'libraries', ...rel.split('/'));
-  if (isZip(target)) return;
-  const urls = [
-    `https://maven.neoforged.net/releases/${rel}`,
-    `${MIRROR}/maven/${rel}`,
-    `${MIRROR}/neoforge/version/${neoforge}/download/installer.jar`,
-  ];
+  if (isZip(target)) return target;
+  const urls = loader.urls(rel, version);
   const sha1 = await fetchText(urls.slice(0, 2).map(u => `${u}.sha1`));
   await downloadFile(urls, target, {
     sha1: sha1 && /^[0-9a-f]{40}/.test(sha1) ? sha1.slice(0, 40) : undefined,
-    text: 'Скачиваю установщик NeoForge',
+    text: `Скачиваю установщик ${loader.title}`,
     report,
   });
   if (!isZip(target)) {
     fs.rmSync(target, { force: true });
-    throw new Error('Установщик NeoForge скачался битым');
+    throw new Error(`Установщик ${loader.title} скачался битым`);
   }
+  return target;
 }
 
 function argValue(args, name) {
@@ -287,7 +365,7 @@ function argValue(args, name) {
   return i >= 0 ? args[i + 1] : undefined;
 }
 
-// NeoForge asks one of its Java tools to download Mojang's mappings. That tool knows
+// The loader asks one of its Java tools to download Mojang's mappings. That tool knows
 // nothing about mirrors and can hang on a bad connection, so the launcher does it itself.
 // Returns true when the step is done here and the tool must not run.
 async function downloadMojangMappings(dirs, processor, report) {
@@ -299,24 +377,26 @@ async function downloadMojangMappings(dirs, processor, report) {
   const json = JSON.parse(fs.readFileSync(path.join(dirs.game, 'versions', version, `${version}.json`), 'utf8'));
   const info = json.downloads?.[`${side}_mappings`];
   if (!version || !output || !info) return false;
-  report({ text: 'Настраиваю NeoForge: скачиваю маппинги Mojang', progress: 0, total: 0 });
+  report({ text: 'Настраиваю загрузчик модов: скачиваю маппинги Mojang', progress: 0, total: 0 });
   touch();
   await downloadFile([info.url, info.url.replace(/^https:\/\/[^/]+/, MIRROR)], output, { sha1: info.sha1 });
   touch();
   return true;
 }
 
-async function ensureNeoForge(dirs, state, neoforge, java, report) {
-  const id = `neoforge-${neoforge}`;
+async function ensureLoader(dirs, state, { kind, version }, minecraft, java, report) {
+  const loader = LOADERS[kind];
+  const id = loader.id(version, minecraft);
   if (!state.versions[id]) {
-    // Output of the NeoForge tools goes to a log: if a tool fails, the reason is there
-    const logFile = path.join(dirs.root, 'logs', 'neoforge-install.log');
+    // Output of the loader tools goes to a log: if a tool fails, the reason is there
+    const logFile = path.join(dirs.root, 'logs', `${kind}-install.log`);
     fs.mkdirSync(path.dirname(logFile), { recursive: true });
     const log = fs.createWriteStream(logFile, { flags: 'a' });
-    log.write(`\n=== ${new Date().toISOString()} NeoForge ${neoforge}\n`);
+    log.write(`\n=== ${new Date().toISOString()} ${loader.title} ${version}\n`);
 
+    let installerJar;
     try {
-      await ensureNeoForgeInstaller(dirs, neoforge, report);
+      installerJar = await ensureLoaderInstaller(dirs, loader, version, minecraft, report);
     } catch (err) {
       log.end();
       throw err;
@@ -328,7 +408,7 @@ async function ensureNeoForge(dirs, state, neoforge, java, report) {
       handler: processor => downloadMojangMappings(dirs, processor, report),
       spawn: (command, args, spawnOptions) => {
         const tool = argValue(args, '--task') || String(args[2]).split('.').pop();
-        report({ text: `Настраиваю NeoForge: ${tool}`, progress: 0, total: 0 });
+        report({ text: `Настраиваю ${loader.title}: ${tool}`, progress: 0, total: 0 });
         log.write(`> ${args.slice(2, 3).join(' ')} ${args.slice(3).join(' ')}\n`);
         const child = spawn(command, args, spawnOptions);
         for (const stream of [child.stdout, child.stderr]) {
@@ -343,8 +423,8 @@ async function ensureNeoForge(dirs, state, neoforge, java, report) {
 
     try {
       await run(
-        installNeoForgedTask('neoforge', neoforge, dirs.game, options),
-        `Устанавливаю NeoForge ${neoforge} (последние проценты идут долго)`,
+        loader.task(version, minecraft, dirs.game, options, installerJar),
+        `Устанавливаю ${loader.title} ${version} (последние проценты идут долго)`,
         report,
         NEOFORGE_STALL_MINUTES,
       );
@@ -355,7 +435,7 @@ async function ensureNeoForge(dirs, state, neoforge, java, report) {
       log.end();
     }
     const resolved = await Version.parse(dirs.game, id);
-    await run(installDependenciesTask(resolved, DOWNLOAD_OPTIONS), 'Скачиваю библиотеки NeoForge', report);
+    await run(installDependenciesTask(resolved, DOWNLOAD_OPTIONS), `Скачиваю библиотеки ${loader.title}`, report);
     state.versions[id] = true;
     stateFile.save(dirs.state, state);
   }
@@ -367,7 +447,8 @@ async function prepareOnce(dirs, map, report) {
   const vanilla = await ensureMinecraft(dirs, state, map.minecraft, report);
   const component = vanilla.javaVersion?.component || 'java-runtime-delta';
   const java = await ensureJava(dirs, state, component, report);
-  const versionId = await ensureNeoForge(dirs, state, map.neoforge, java.java, report);
+  const loader = loaderOf(map);
+  const versionId = loader ? await ensureLoader(dirs, state, loader, map.minecraft, java.java, report) : map.minecraft;
   return { versionId, java };
 }
 
@@ -429,7 +510,7 @@ function errorDetails(err, limit = 5) {
     return `  - ${e?.message || String(e)}${code ? ` [${code}]` : ''}${url}`;
   });
   if (all.length > limit) lines.push(`  ... and ${all.length - limit} more`);
-  if (err?.logFile) lines.push(`  NeoForge log: ${err.logFile}`);
+  if (err?.logFile) lines.push(`  Loader log: ${err.logFile}`);
   return lines.join('\n');
 }
 
@@ -440,6 +521,41 @@ function offlineUuid(nick) {
   hash[6] = (hash[6] & 0x0f) | 0x30;
   hash[8] = (hash[8] & 0x3f) | 0x80;
   return hash.toString('hex');
+}
+
+// Native libraries (lwjgl.dll and the like) of versions that keep them in "natives" jars, as 1.16.5 does.
+// @xmcl's own step unpacks them with its unzip, which cuts larger files short and then waits forever:
+// the game got a broken lwjgl.dll ("not a valid Win32 application"). adm-zip does it here instead,
+// with the same filters; a stamp of the jars keeps it from unpacking again on every start.
+async function extractNatives(resource, version, options) {
+  const root = options.nativeRoot || resource.getNativesRoot(version.id);
+  const platform = process.arch === 'ia32' ? 'x86' : process.arch;
+  const natives = version.libraries.filter(lib => lib.isNative || lib.classifier.startsWith('natives'));
+  const jars = natives.map(lib => resource.getLibraryByPath(lib.download.path));
+  const stampFile = path.join(root, '.mg-natives.json');
+  const stamp = JSON.stringify(jars.map(jar => [path.basename(jar), fs.statSync(jar).size]));
+  try {
+    if (fs.readFileSync(stampFile, 'utf8') === stamp) return;
+  } catch {
+    // Not unpacked yet
+  }
+  fs.rmSync(root, { recursive: true, force: true });
+  fs.mkdirSync(root, { recursive: true });
+  natives.forEach((lib, i) => {
+    const excluded = lib.extractExclude || [];
+    for (const entry of new AdmZip(jars[i]).getEntries()) {
+      const name = entry.entryName;
+      if (entry.isDirectory || name.includes('META-INF/') || /\.(sha1|git)$/.test(name)) continue;
+      if (excluded.some(prefix => name.startsWith(prefix))) continue;
+      // Newer jars keep natives per platform: "windows/x64/org/lwjgl/lwjgl.dll"
+      if (name.includes('/')) {
+        const [os, arch] = name.split('/');
+        if (os !== 'windows' || (arch === 'ia32' ? 'x86' : arch) !== platform) continue;
+      }
+      fs.writeFileSync(path.join(root, path.basename(name)), entry.getData());
+    }
+  });
+  fs.writeFileSync(stampFile, stamp);
 }
 
 // Starts the game in <root>\instances\<map id>. Returns the Java process.
@@ -466,6 +582,12 @@ async function start(dirs, { mapId, versionId, javaw, nick, world, server, memor
     extraMCArgs: server ? ['--quickPlayMultiplayer', server]
       : world ? ['--quickPlaySingleplayer', world]
       : [],
+    prechecks: [
+      LaunchPrecheck.checkVersion,
+      LaunchPrecheck.checkLibraries,
+      extractNatives,
+      LaunchPrecheck.linkAssets,
+    ],
   });
 
   const log = fs.createWriteStream(path.join(gamePath, 'logs', 'launcher.log'));
@@ -502,4 +624,4 @@ function lastCrashReport(dirs, mapId, since) {
   return files[0]?.file || null;
 }
 
-module.exports = { prepare, start, onHostAddress, offlineUuid, lastCrashReport, describeError, errorDetails, downloadFile, dispatcher };
+module.exports = { loaderOf, prepare, start, extractNatives, onHostAddress, offlineUuid, lastCrashReport, describeError, errorDetails, downloadFile, dispatcher };

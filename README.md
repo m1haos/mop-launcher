@@ -1,6 +1,6 @@
 # MG Launcher
 
-Лаунчер карт MINI Games Studio. Electron + библиотеки @xmcl (установка NeoForge, загрузка файлов Mojang, запуск).
+Лаунчер карт MINI Games Studio. Electron + библиотеки @xmcl (установка NeoForge и Forge, загрузка файлов Mojang, запуск).
 Пиратский: офлайн-ники, без входа в аккаунт. До версии 0.2 назывался MOP Launcher.
 
 Репозиторий лежит в папке `launcher/` проекта карты. Сам проект карты
@@ -160,6 +160,20 @@ npm.cmd run pack:build   # собрать launcher/dist-pack/
 
 Каждая глава собирается своим скриптом; `scripts/manifest-out.js` заменяет в `dist-pack/manifest.json`
 только запись своей карты, записи других глав остаются. Лаунчеры 0.1.x читают только `maps`.
+
+### Другие главы и Forge
+
+Скрипты `pack:lock`, `pack:build`, `try:install` по умолчанию работают с проектом второй главы (папка над `launcher/`);
+другую главу передают первым аргументом: `npm.cmd run pack:build -- "..\..\MOP Chapter 1"`. `dist-pack/` общий.
+
+Глава 1 идёт на Minecraft 1.16.5 и Forge (`"forge"` вместо `"neoforge"` в `pack.json` и в манифесте).
+Лаунчер ставит Forge тем же путём, что NeoForge, и Java 8 от Mojang (`jre-legacy`). Особенности сборки:
+
+- моды не с Modrinth лежат в `pack/mods` и едут в `overrides/mods` как есть; папки из `pack/overrides` копируются в игру;
+- ресурспак может быть архивом (`pack/resourcepacks/<имя>.zip`);
+- `"shader": { "loader": "optifine" }`: шейдер включается через `optionsshaders.txt`, а у уровней графики
+  в `graphics.json` есть блок `optifine` (пишется в `optionsof.txt`);
+- `"releaseUrl"`: тяжёлые файлы главы лежат в своём релизе, в манифест идут полные ссылки туда.
 
 ## Манифест
 

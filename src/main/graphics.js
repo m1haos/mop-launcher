@@ -63,12 +63,12 @@ function merge(target, source) {
   return target;
 }
 
-// iris.properties is "key=value"; the shader must stay on and be ours
-function writeIris(file, shaderFile) {
+// "key=value" files (iris.properties, optionsshaders.txt of OptiFine): the keys given are replaced
+function writeProperties(file, values) {
   const lines = fs.existsSync(file) ? fs.readFileSync(file, 'utf8').split(/\r?\n/).filter(Boolean) : [];
-  const values = { enableShaders: 'true', shaderPack: shaderFile };
-  const out = lines.filter(line => !/^(enableShaders|shaderPack)=/.test(line));
+  const out = lines.filter(line => !Object.hasOwn(values, line.slice(0, line.indexOf('='))));
   for (const [key, value] of Object.entries(values)) out.push(`${key}=${value}`);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, out.join('\n') + '\n');
 }
 
@@ -79,10 +79,17 @@ function writeLevel(instance, graphics, level) {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, JSON.stringify(merge(readJson(file, {}), level.sodium), null, 2));
   }
+  // OptiFine keeps its video settings in optionsof.txt, "key:value" like options.txt
+  if (level.optifine) writeOptions(path.join(instance, 'optionsof.txt'), level.optifine);
   if (level.shader && graphics.shaderFile) {
     fs.mkdirSync(path.join(instance, 'shaderpacks'), { recursive: true });
     fs.writeFileSync(path.join(instance, 'shaderpacks', `${graphics.shaderFile}.txt`), level.shader);
-    writeIris(path.join(instance, 'config', 'iris.properties'), graphics.shaderFile);
+    // The shader must stay on and be ours
+    if (graphics.shaderLoader === 'optifine') {
+      writeProperties(path.join(instance, 'optionsshaders.txt'), { shaderPack: graphics.shaderFile });
+    } else {
+      writeProperties(path.join(instance, 'config', 'iris.properties'), { enableShaders: 'true', shaderPack: graphics.shaderFile });
+    }
   }
 }
 
