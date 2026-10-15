@@ -9,8 +9,13 @@ const { app, BrowserWindow } = require('electron');
 
 const W = 1280;
 const H = 720;
-const PACK_DIR = path.resolve(__dirname, '..', '..', 'pack');
-const svg = fs.readFileSync(path.join(PACK_DIR, 'cover.svg'), 'utf8');
+// Another chapter: npm.cmd run cover -- "<its pack folder>"
+const PACK_DIR = path.resolve(process.argv.slice(2).find(a => !a.startsWith('-')) || path.join(__dirname, '..', '..', 'pack'));
+// A data: URL cannot reach files next to it, so pictures the SVG uses (href="shot.jpg") go inside
+const svg = fs.readFileSync(path.join(PACK_DIR, 'cover.svg'), 'utf8').replace(/href="([^":#]+\.(jpe?g|png))"/g, (_, name, ext) => {
+  const type = ext === 'png' ? 'png' : 'jpeg';
+  return `href="data:image/${type};base64,${fs.readFileSync(path.join(PACK_DIR, name)).toString('base64')}"`;
+});
 const svgUrl = `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
 
 const draw = `new Promise((resolve, reject) => {

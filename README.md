@@ -106,6 +106,7 @@ npm.cmd run pack:build   # собрать launcher/dist-pack/
 - Название, описание, версия карты и версия NeoForge хранятся в `pack/pack.json`.
 - Лаунчер хранит обложки по sha1 (`coverSha1` в манифесте) в `%APPDATA%\MG Launcher\covers` и не качает их повторно.
 - Обложка рисуется из `pack/cover.svg`: после правки выполните `npm.cmd run cover`, получится `pack/cover.png`
+  (другая глава: `npm.cmd run cover -- "<папка её pack>"`; картинки рядом с SVG, на которые он ссылается, встраиваются сами)
   (1280×720, с плёночным зерном). Сборка берёт PNG.
 - `pack:lock` не трогает уже закреплённые версии. Обновить всё до свежих версий
   можно через `tools/sync-mods.ps1 -Update`.
