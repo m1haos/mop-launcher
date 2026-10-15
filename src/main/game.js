@@ -594,6 +594,13 @@ async function start(dirs, { mapId, versionId, javaw, nick, world, server, memor
   proc.stdout?.pipe(log, { end: false });
   proc.stderr?.pipe(log, { end: false });
   proc.on('exit', () => log.end());
+  // Windows ran out of memory for Java (other programs hold it): the player should hear that,
+  // not just "exit code 1". proc.outOfMemory is read when the game exits.
+  for (const stream of [proc.stdout, proc.stderr]) {
+    stream?.on('data', chunk => {
+      if (/insufficient memory for the Java Runtime|java\.lang\.OutOfMemoryError/.test(chunk)) proc.outOfMemory = true;
+    });
+  }
   return proc;
 }
 

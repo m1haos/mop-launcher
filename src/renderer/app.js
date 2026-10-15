@@ -411,7 +411,7 @@ window.mop.onProgress(({ id, text, progress, total }) => {
   }
 });
 
-window.mop.onGame(({ id, running, host, address, code, crash, logs }) => {
+window.mop.onGame(({ id, running, host, address, code, crash, logs, outOfMemory }) => {
   state.statuses[id] = { ...state.statuses[id], running };
   if (!running) delete state.hosts[id];
   else if (address) state.hosts[id] = address;
@@ -424,7 +424,9 @@ window.mop.onGame(({ id, running, host, address, code, crash, logs }) => {
     if (!running) setStatus(id, '');
     return;
   }
-  setStatus(id, `Игра закрылась с ошибкой (код ${code}). `, 'error');
+  setStatus(id, outOfMemory
+    ? 'Не хватило памяти компьютера. Закрой другие игры и тяжёлые программы и запусти снова. '
+    : `Игра закрылась с ошибкой (код ${code}). `, 'error');
   if (gameView && gameView.id === id) {
     const open = document.createElement('button');
     open.type = 'button';

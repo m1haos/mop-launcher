@@ -87,7 +87,7 @@ async function play(map) {
     running.delete(map.id);
     const crash = code !== 0 ? game.lastCrashReport(d, map.id, startedAt) : null;
     const logs = path.join(d.instances, map.id, 'logs');
-    send('game', { id: map.id, running: false, code, crash, logs });
+    send('game', { id: map.id, running: false, code, crash, logs, outOfMemory: !!proc.outOfMemory });
   });
   send('game', { id: map.id, running: true, host: true });
   return {
