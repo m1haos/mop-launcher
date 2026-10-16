@@ -204,10 +204,10 @@ function plural(n, one, few, many) {
 
 // ---------- game page ----------
 
-// A project page: chapter tabs on top, the chosen chapter below (the latest one at first)
+// A project page: chapter tabs on top, the chosen chapter below (chapter 1 at first: the story starts there)
 function renderGame(game) {
   const chapters = chaptersOf(game);
-  const map = chapters.find(m => m.id === state.chapter[game.id]) || chapters[chapters.length - 1];
+  const map = chapters.find(m => m.id === state.chapter[game.id]) || chapters[0];
   state.chapter[game.id] = map.id;
   const section = fromTemplate('tpl-game');
 
